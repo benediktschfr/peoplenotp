@@ -50,19 +50,4 @@ The data simulates a typical pre-post study (n = 50, observations = 100).
 Baseline values are normally distributed around a mean of 90 degrees (SD = 15).
 True change per patient was simulated with a mean of 20 degrees (SD = 12).
 }
-\examples{
-library(dplyr)
-data(shoulder)
-
-# Calculate baseline SD for S_diff calculation
-pre_sd <- shoulder \%>\%
-  filter(time == "pre") \%>\%
-  pull(rotation) \%>\%
-  sd()
-
-rel <- 0.90
-s_diff <- pre_sd * sqrt(2 * (1 - rel))
-
-# The S_diff is now ready for use in a Bayesian model
-}
 \keyword{datasets}

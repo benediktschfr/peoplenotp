@@ -110,6 +110,40 @@ thesis <- tibble(
 usethis::use_data(thesis, overwrite = TRUE)
 
 # ==============================================================================
+# Imposter ----
+# ==============================================================================
+set.seed(1775576764)
+
+n <- 50
+pre_mean <- 70
+mean_change <- -15
+
+imposter <- tibble(
+  id = seq(1, n),
+  pre = rnorm(n, mean = pre_mean, sd = 10),
+  change = rnorm(n, mean = mean_change, sd = 12)
+) |>
+  mutate(
+    post = pre + change
+  ) |>
+  select(-change) |>
+  pivot_longer(
+    cols = c(pre, post),
+    values_to = "imposter_score",
+    names_to = "measurement"
+  ) |>
+  mutate(
+    imposter_score = pmin(pmax(imposter_score, 0), 100)
+  ) |>
+  set_variable_labels(
+    id = "ID",
+    measurement = "Measurement",
+    imposter_score = "Imposter Score"
+  )
+
+usethis::use_data(imposter, overwrite = TRUE)
+
+# ==============================================================================
 # Shoulder ----
 # ==============================================================================
 set.seed(1775578562)
