@@ -1,0 +1,19 @@
+globalVariables(unique(c(
+  "lower_1",
+  "lower_2",
+  "median_1",
+  "median_2",
+  "upper_1",
+  "upper_2",
+  "custom_palettes",
+  "improvement_pct",
+  ".data",
+  ".epred",
+  "id",
+  "n_success",
+  "n_total",
+  "results",
+  "rope",
+  "threshold",
+  "id"
+)))
