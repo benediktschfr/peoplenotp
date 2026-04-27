@@ -228,7 +228,7 @@ phq_9 <- dat_combined |>
   mutate(
     id = rep(1:N, 2),
     time = factor(rep(c("pre", "post"), each = N), levels = c("pre", "post")),
-    # Summe über alle 10 Items bilden (Maximalwert = 30)
+    # Summe über alle 9 Items bilden (Maximalwert = 27)
     phq_9 = rowSums(across(starts_with("Item")))
   ) |>
   relocate(id, time, .before = 1) |>
