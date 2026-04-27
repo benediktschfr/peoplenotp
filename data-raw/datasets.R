@@ -179,6 +179,69 @@ usethis::use_data(shoulder, overwrite = TRUE)
 set.seed(1775648491)
 
 # ==============================================================================
+# PHQ-9 ----
+# ==============================================================================
+set.seed(1777294530)
+N <- 150 # Anzahl Probanden
+I <- 9 # Anzahl Items
+
+# Wahre Prä-Werte: z.B. hohe Symptombelastung zu Beginn
+theta_pre <- rnorm(N, mean = 2.1, sd = 1)
+
+# Wahre Post-Werte: Intervention senkt den Wert im Schnitt um 1.0, mit individueller Varianz (Schwankung)
+theta_post <- theta_pre + rnorm(N, mean = -2, sd = 1.4)
+
+# Schwierigkeiten der Items
+item_diffs <- seq(-2, 2, length.out = I)
+
+# Hilfsfunktion zur Simulation einer 4-stufigen Likert-Skala (0 bis 3)
+sim_likert <- function(theta, b) {
+  n_persons <- length(theta)
+  n_items <- length(b)
+  dat <- matrix(0, nrow = n_persons, ncol = n_items)
+
+  for (i in 1:n_items) {
+    latent_response <- (theta - b[i]) + rlogis(n_persons)
+
+    dat[, i] <- case_when(
+      latent_response > 1.5 ~ 3, # "Fast jeden Tag"
+      latent_response > 0.0 ~ 2, # "An mehr als der Hälfte der Tage"
+      latent_response > -1.5 ~ 1, # "An einzelnen Tagen"
+      TRUE ~ 0 # "Überhaupt nicht"
+    )
+  }
+  dat
+}
+
+# 4-stufige Likert-Antworten für Prä und Post generieren
+dat_pre <- sim_likert(theta_pre, item_diffs)
+dat_post <- sim_likert(theta_post, item_diffs)
+
+colnames(dat_pre) <- colnames(dat_post) <- paste0("item_", 1:I)
+
+# --- 2. Concurrent Calibration (IRT) ---
+dat_combined <- rbind(dat_pre, dat_post)
+
+phq_9 <- dat_combined |>
+  as.data.frame() |>
+  as_tibble() |>
+  mutate(
+    id = rep(1:N, 2),
+    time = factor(rep(c("pre", "post"), each = N), levels = c("pre", "post")),
+    # Summe über alle 10 Items bilden (Maximalwert = 30)
+    phq_9 = rowSums(across(starts_with("Item")))
+  ) |>
+  relocate(id, time, .before = 1) |>
+  arrange(id) |>
+  set_variable_labels(
+    id = "ID",
+    time = "Meassurement",
+    phq_9 = "PHQ-9 Score"
+  )
+
+usethis::use_data(phq_9, overwrite = TRUE)
+
+# ==============================================================================
 # Burnout ----
 # ==============================================================================
 set.seed(1776172078)
