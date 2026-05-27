@@ -76,6 +76,15 @@ custom_palettes <- list(
     "warm_grey" = "#9C9592",
     "aubergine" = "#4A3B4C", # Neu: Ein dunkler Aubergineton
     "sand" = "#E6D5B8" # Neu: Ein warmer, heller Sandton
+  ),
+  chatsworth = c(
+    "cyanotype" = "#3f7185",
+    "herbarium" = "#ad7640",
+    "blue_john" = "#58383e",
+    "old_kitchen" = "#a89a6b",
+    "freudian" = "#a87562",
+    "chatsworth_blue" = "#0d3d4c",
+    "passageway_pink" = "#e4c4aa"
   )
 )
 
