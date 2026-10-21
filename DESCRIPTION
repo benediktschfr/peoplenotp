@@ -1,12 +1,24 @@
 Package: peoplenotp
-Title: What the Package Does (One Line, Title Case)
+Title: Clinical Certainty and Individual Meaningful Change Analysis
 Version: 0.0.0.9000
 Authors@R: 
-    person("First", "Last", , "first.last@example.com", role = c("aut", "cre"))
-Description: What the package does (one paragraph).
+    person("Benedikt", "Schäfer",
+           email = "benediktclaus@outlook.com",
+           role = c("aut", "cre"))
+Description: Evaluate clinical certainty and practical significance for
+    individual change trajectories and group-level interventions.
+    Facilitates Region of Practical Equivalence (ROPE) and Minimal
+    Important Difference (MID) evaluations using Bayesian posterior
+    distributions generated via 'tidybayes' or empirical longitudinal data.
+    Provides functions to calculate univariate and joint clinical certainty
+    classifications, compute sensitivity grids across parameter thresholds,
+    and visualize clinical boundaries with custom 'ggplot2' geoms, palettes,
+    and publication-ready themes.
 License: MIT + file LICENSE
-Encoding: UTF-8
-Roxygen: list(markdown = TRUE)
+URL: https://github.com/benediktschfr/peoplenotp
+BugReports: https://github.com/benediktschfr/peoplenotp/issues
+Depends: 
+    R (>= 4.1.0)
 Imports: 
     cli,
     dplyr,
@@ -18,10 +30,10 @@ Imports:
     tibble,
     tidybayes,
     tidyr
-Depends: 
-    R (>= 4.1.0)
 Suggests: 
     testthat (>= 3.0.0)
-LazyData: true
 Config/roxygen2/version: 8.1.1
 Config/testthat/edition: 3
+Encoding: UTF-8
+LazyData: true
+Roxygen: list(markdown = TRUE)
