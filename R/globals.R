@@ -1,4 +1,4 @@
-globalVariables(unique(c(
+utils::globalVariables(unique(c(
   "lower_1",
   "lower_2",
   "median_1",
@@ -14,6 +14,5 @@ globalVariables(unique(c(
   "n_total",
   "results",
   "rope",
-  "threshold",
-  "id"
+  "threshold"
 )))

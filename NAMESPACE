@@ -9,19 +9,27 @@ export(highlight_individual)
 export(theme_peoplenotp)
 export(use_default_theme)
 export(use_peoplenotp_theme)
-importFrom(dplyr,left_join)
-importFrom(dplyr,mutate)
-importFrom(dplyr,n_distinct)
-importFrom(dplyr,select)
-importFrom(dplyr,summarise)
-importFrom(dplyr,ungroup)
-importFrom(ggplot2,aes)
-importFrom(ggplot2,geom_line)
-importFrom(ggplot2,geom_point)
-importFrom(ggplot2,scale_color_manual)
+importFrom(dplyr,
+  left_join,
+  mutate,
+  n_distinct,
+  select,
+  summarise,
+  ungroup
+)
+importFrom(ggplot2,
+  aes,
+  geom_line,
+  geom_point,
+  scale_color_manual
+)
 importFrom(purrr,map2)
-importFrom(rlang,as_string)
-importFrom(rlang,ensym)
-importFrom(tidyr,crossing)
-importFrom(tidyr,nest)
-importFrom(tidyr,unnest)
+importFrom(rlang,
+  as_string,
+  ensym
+)
+importFrom(tidyr,
+  crossing,
+  nest,
+  unnest
+)

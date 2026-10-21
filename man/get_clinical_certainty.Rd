@@ -2,11 +2,12 @@
 % Please edit documentation in R/get_clinical_certainty.R
 \name{get_clinical_certainty}
 \alias{get_clinical_certainty}
-\title{Calculate Clinical Certainty Based on ROPE}
+\title{Calculate clinical certainty based on ROPE}
 \usage{
 get_clinical_certainty(
   data,
-  col,
+  col = .epred,
+  .by = NULL,
   better_is = "higher",
   range = c(-1, 1),
   ci_width = 0.95,
@@ -15,45 +16,104 @@ get_clinical_certainty(
 )
 }
 \arguments{
-\item{data}{A data frame or tibble containing the posterior draws.}
+\item{data}{A data frame or tibble containing the posterior draws. If
+grouped (e.g., via \code{\link[dplyr:group_by]{dplyr::group_by()}}) and \code{.by} is not supplied,
+existing grouping variables except \code{.row} (automatically added by
+\code{tidybayes::add_epred_draws()}) are preserved and used for group-wise
+summarization.}
 
-\item{col}{The unquoted name of the column in \code{data} containing the numeric posterior draws.}
+\item{col}{<\code{\link[rlang:args_data_masking]{data-masking}}> The column in \code{data}
+containing the numeric posterior draws. Defaults to \code{.epred}.}
 
-\item{better_is}{Character. Indicates the desired direction of the effect. Allowed values are \code{"higher"} (higher values are better, e.g., well-being) or \code{"lower"} (lower values are better, e.g., depression). Default is \code{"higher"}.}
+\item{.by}{<\code{\link[dplyr:dplyr_tidy_select]{tidy-select}}> Optional grouping
+columns for summarizing across multiple participants or conditions (e.g.,
+\code{.by = id} or \code{.by = c(id, group)}). If provided, any existing grouping on
+\code{data} is ignored. Defaults to \code{NULL}.}
 
-\item{range}{Numeric vector of length 2. Defines the boundaries of the ROPE (Minimum Clinically Important Difference). Default is \code{c(-1, 1)}.}
+\item{better_is}{A single character string indicating the desired direction
+of the effect. Allowed values are \code{"higher"} (higher values are better,
+e.g., well-being) or \code{"lower"} (lower values are better, e.g., pain).
+Defaults to \code{"higher"}.}
 
-\item{ci_width}{Numeric value between 0 and 1. Defines the width of the credible interval returned for the median effect. Default is \code{0.95}.}
+\item{range}{A numeric vector of length 2 defining the lower and upper
+boundaries of the ROPE (Minimum Clinically Important Difference), in the
+form \code{c(lower, upper)}. Defaults to \code{c(-1, 1)}.}
 
-\item{certainty_boundaries}{Numeric vector of length 2. Defines the probability thresholds for assigning clinical categories in the order \code{c(Likely_Boundary, Significant_Boundary)}. Default is \code{c(0.975, 0.99)}.}
+\item{ci_width}{A single numeric value strictly between 0 and 1 defining the
+width of the credible interval returned for the median effect. Defaults to
+\code{0.95}.}
 
-\item{include_rope}{Logical. Should the ROPE boundaries and the percentage of draws within the ROPE be included in the output? Default is \code{TRUE}.}
+\item{certainty_boundaries}{A numeric vector of length 2 defining the
+probability thresholds (between 0 and 1) for assigning clinical categories
+in the order \code{c(likely_boundary, significant_boundary)}. Defaults to
+\code{c(0.975, 0.99)}.}
+
+\item{include_rope}{A single logical flag indicating whether the ROPE
+boundaries (\code{rope_low}, \code{rope_high}) and the proportion of draws within
+the ROPE (\code{rope_pct}) should be included in the output. Defaults to \code{TRUE}.}
 }
 \value{
-A \code{tibble} with a single row containing the median, credible intervals, probability of direction (pd), ROPE percentages (optional), and the final \code{clinical_status}.
+A \code{\link[tibble:tibble]{tibble::tibble()}} with one row per group (or a single row if
+ungrouped) containing any grouping columns along with:
+\itemize{
+\item \code{median}: Posterior median of the draws.
+\item \code{lower}: Lower bound of the credible interval.
+\item \code{upper}: Upper bound of the credible interval.
+\item \code{pd}: Probability of Direction (maximum of the proportion of draws
+strictly greater than 0 or strictly less than 0).
+\item \code{rope_low}, \code{rope_high}, \code{rope_pct}: Lower ROPE bound, upper ROPE bound,
+and proportion of draws within the ROPE (included when
+\code{include_rope = TRUE}).
+\item \code{improvement_pct}: Proportion of draws exceeding the ROPE in the
+beneficial direction.
+\item \code{deterioration_pct}: Proportion of draws exceeding the ROPE in the
+detrimental direction.
+\item \code{clinical_status}: Character classification (\code{"Significant Improvement"},
+\code{"Likely Improvement"}, \code{"Significant Deterioration"},
+\code{"Likely Deterioration"}, or \code{"Undecided"}).
+}
 }
 \description{
-This function evaluates posterior draws (typically the difference between
-two measurement points) and categorizes the effect into clinical statuses.
-It calculates the median, credible interval, and Probability of Direction (pd).
-It also compares the entire posterior distribution against a defined
-\emph{Region of Practical Equivalence (ROPE)}. Depending on the desired direction
-of the effect (\code{better_is}) and predefined probability thresholds
-(\code{certainty_boundaries}), a final \code{clinical_status} is assigned.
+Evaluates posterior draws (such as differences between measurement points or
+predictions from \code{tidybayes::add_epred_draws()}) and categorizes the effect
+into clinical statuses. Calculates the median, credible interval, and
+Probability of Direction (pd), and compares the posterior distribution
+against a defined \emph{Region of Practical Equivalence (ROPE)}.
+
+Supports both ungrouped data frames (single participant) and grouped data
+frames or \code{.by} specifications (multiple participants), allowing it to be
+piped directly after \code{tidybayes::add_epred_draws()}.
 }
 \examples{
-# Simulate a dataframe of posterior draws
+# 1. Single participant workflow
 set.seed(123)
 df_patient <- tibble::tibble(
   iteration = 1:4000,
-  score_difference = rnorm(4000, mean = 5, sd = 1.5)
+  score_difference = stats::rnorm(4000, mean = 5, sd = 1.5)
 )
 
-# Use the function in a pipe workflow
 df_patient |>
   get_clinical_certainty(
     col = score_difference,
     better_is = "higher",
     range = c(-2, 2)
   )
+
+# 2. Multiple participants using `.by` (or directly after add_epred_draws)
+df_multi <- tibble::tibble(
+  id = rep(c("P1", "P2", "P3"), each = 1000),
+  .epred = c(
+    stats::rnorm(1000, mean = 4.5, sd = 1.0),
+    stats::rnorm(1000, mean = 0.2, sd = 0.8),
+    stats::rnorm(1000, mean = -3.8, sd = 1.1)
+  )
+)
+
+df_multi |>
+  get_clinical_certainty(
+    .by = id,
+    better_is = "higher",
+    range = c(-2, 2)
+  )
+
 }
