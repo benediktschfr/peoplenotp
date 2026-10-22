@@ -484,3 +484,50 @@
 #' @examples
 #' data(cardiac_rehab)
 "cardiac_rehab"
+
+
+#' Longitudinal Data from an Adjunctive Depression Intervention Study
+#'
+#' A dataset containing clinical outcomes from an intervention study evaluating
+#' an adjunctive psychotherapeutic intervention for inpatients with major
+#' depressive disorder. This dataset is a re-export of \code{claus_2020} from the
+#' \pkg{clinicalsignificance} package.
+#'
+#' @format A tibble with 172 rows and 9 variables:
+#' \describe{
+#'   \item{id}{Unique participant identification number (\code{numeric}).}
+#'   \item{age}{Age of the participant in years (\code{numeric}).}
+#'   \item{sex}{Biological sex of the participant (\code{factor} with levels
+#'     \code{"Female"} and \code{"Male"}).}
+#'   \item{treatment}{Assigned intervention group (\code{factor} with levels
+#'     \code{"TAU"} [Treatment as Usual] and \code{"PA"} [Psychotherapeutic
+#'     Adjunct / Programmed Activity]).}
+#'   \item{time}{Measurement occasion (\code{numeric}: 1 = Baseline / Intake,
+#'     2 = Intermediate / Post-Intervention, 3 = Discharge, 4 = Follow-up).}
+#'   \item{bdi}{Beck Depression Inventory II (BDI-II) total score
+#'     (\code{numeric}). Higher scores indicate more severe depressive symptoms.}
+#'   \item{shaps}{Snaith-Hamilton Pleasure Scale (SHAPS) total score
+#'     (\code{numeric}). Higher scores reflect a higher degree of anhedonia.}
+#'   \item{who}{WHO-5 Well-Being Index total score (\code{numeric}). Higher
+#'     scores indicate greater psychological well-being.}
+#'   \item{hamd}{Hamilton Rating Scale for Depression (HAMD-17) clinician-rated
+#'     total score (\code{numeric}). Higher scores indicate more severe depressive symptoms.}
+#' }
+#'
+#' @source
+#' The data was retrieved from the \pkg{clinicalsignificance} package:
+#' \url{https://benediktclaus.github.io/clinicalsignificance/reference/claus_2020.html}.
+#'
+#' @references
+#' Claus, B. B., Böhme, J., & Gaudlitz, K. (2020). Effectiveness of an Adjunctive
+#' Psychotherapeutic Intervention in Inpatients with Major Depression: A Naturalistic
+#' Feasibility Study. \emph{Psychotherapy and Psychosomatics}, 89(4), 258–260.
+#' \doi{10.1159/000505500}
+#'
+#' @seealso
+#' \code{\link[clinicalsignificance]{claus_2020}}
+#'
+#' @examples
+#' data(placebo)
+#' head(placebo)
+"placebo"
