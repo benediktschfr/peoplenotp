@@ -500,10 +500,10 @@
 #'   \item{sex}{Biological sex of the participant (\code{factor} with levels
 #'     \code{"Female"} and \code{"Male"}).}
 #'   \item{treatment}{Assigned intervention group (\code{factor} with levels
-#'     \code{"TAU"} [Treatment as Usual] and \code{"PA"} [Psychotherapeutic
-#'     Adjunct / Programmed Activity]).}
+#'     \code{"TAU"} for Treatment as Usual and \code{"PA"} for Psychotherapeutic
+#'     Adjunct / Programmed Activity).}
 #'   \item{time}{Measurement occasion (\code{numeric}: 1 = Baseline / Intake,
-#'     2 = Intermediate / Post-Intervention, 3 = Discharge, 4 = Follow-up).}
+#'     2 and 3 = Intermediate, 4 = Discharge).}
 #'   \item{bdi}{Beck Depression Inventory II (BDI-II) total score
 #'     (\code{numeric}). Higher scores indicate more severe depressive symptoms.}
 #'   \item{shaps}{Snaith-Hamilton Pleasure Scale (SHAPS) total score
