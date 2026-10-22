@@ -598,3 +598,11 @@ cardiac_rehab <- individual_params |>
   )
 
 usethis::use_data(cardiac_rehab, overwrite = TRUE)
+
+
+# ==============================================================================
+# Placebo ----
+# ==============================================================================
+placebo <- clinicalsignificance::claus_2020
+
+usethis::use_data(placebo, overwrite = TRUE)
