@@ -2,12 +2,13 @@
 % Please edit documentation in R/get_joint_clinical_certainty.R
 \name{get_joint_clinical_certainty}
 \alias{get_joint_clinical_certainty}
-\title{Calculate Joint Clinical Certainty for Two Outcomes}
+\title{Calculate joint clinical certainty for two outcomes}
 \usage{
 get_joint_clinical_certainty(
   data,
   col_1,
   col_2,
+  .by = NULL,
   better_is = c("higher", "higher"),
   ranges = list(c(-1, 1), c(-1, 1)),
   ci_width = 0.95,
@@ -16,40 +17,91 @@ get_joint_clinical_certainty(
 )
 }
 \arguments{
-\item{data}{A data frame or tibble containing the posterior draws.}
+\item{data}{A data frame or tibble containing the posterior draws. If
+grouped (e.g., via \code{\link[dplyr:group_by]{dplyr::group_by()}}) and \code{.by} is not supplied,
+existing grouping variables except \code{.row} (automatically added by
+\code{tidybayes::add_epred_draws()}) are preserved and used for group-wise
+summarization.}
 
-\item{col_1}{The unquoted name of the first numeric column.}
+\item{col_1}{<\code{\link[rlang:args_data_masking]{data-masking}}> The first numeric
+column in \code{data} containing posterior draws.}
 
-\item{col_2}{The unquoted name of the second numeric column.}
+\item{col_2}{<\code{\link[rlang:args_data_masking]{data-masking}}> The second numeric
+column in \code{data} containing posterior draws.}
 
-\item{better_is}{Character vector of length 2. Indicates the desired direction for \code{col_1} and \code{col_2}. Allowed values are \code{"higher"} or \code{"lower"}. Default is \code{c("higher", "higher")}.}
+\item{.by}{<\code{\link[dplyr:dplyr_tidy_select]{tidy-select}}> Optional grouping
+columns for summarizing across multiple participants or conditions (e.g.,
+\code{.by = id} or \code{.by = c(id, group)}). If provided, any existing grouping on
+\code{data} is ignored. Defaults to \code{NULL}.}
 
-\item{ranges}{List of two numeric vectors. Defines the ROPE boundaries for \code{col_1} and \code{col_2}. Default is \code{list(c(-1, 1), c(-1, 1))}.}
+\item{better_is}{A character vector of length 2 indicating the desired
+direction for \code{col_1} and \code{col_2}. Allowed values are \code{"higher"} or
+\code{"lower"}. Defaults to \code{c("higher", "higher")}.}
 
-\item{ci_width}{Numeric. Width of the credible interval returned for the medians. Default is \code{0.95}.}
+\item{ranges}{A list of two numeric vectors, each of length 2, defining the
+lower and upper ROPE boundaries for \code{col_1} and \code{col_2} in the form
+\code{list(c(lower_1, upper_1), c(lower_2, upper_2))}. Defaults to
+\code{list(c(-1, 1), c(-1, 1))}.}
 
-\item{certainty_boundaries}{Numeric vector of length 2. Thresholds for "Likely" and "Significant". Default is \code{c(0.975, 0.99)}.}
+\item{ci_width}{A single numeric value strictly between 0 and 1 defining the
+width of the credible interval returned for the medians. Defaults to
+\code{0.95}.}
 
-\item{include_marginals}{Logical. If \code{TRUE}, the output will also include the marginal probabilities and clinical statuses for each individual column. Default is \code{FALSE}.}
+\item{certainty_boundaries}{A numeric vector of length 2 defining the
+probability thresholds (between 0 and 1) for assigning \code{"Likely"} and
+\code{"Significant"} categories, in the order
+\code{c(likely_boundary, significant_boundary)}. Defaults to \code{c(0.975, 0.99)}.}
+
+\item{include_marginals}{A single logical flag. If \code{TRUE}, the output also
+includes the marginal ROPE probabilities and clinical statuses for each
+individual outcome. Defaults to \code{FALSE}.}
 }
 \value{
-A \code{tibble} with a single row containing the medians, CIs, marginal and joint Probability of Direction (pd), joint ROPE probabilities, and the final \code{joint_clinical_status}. If \code{include_marginals = TRUE}, individual ROPE probabilities and statuses are appended.
+A \code{\link[tibble:tibble]{tibble::tibble()}} with one row per group (or a single row if
+ungrouped) containing any grouping columns along with:
+\itemize{
+\item \code{median_1}, \code{lower_1}, \code{upper_1}, \code{pd_1}: Posterior median, credible
+interval bounds, and marginal Probability of Direction for \code{col_1}.
+\item \code{improvement_pct_1}, \code{deterioration_pct_1}, \code{clinical_status_1}:
+Marginal ROPE probabilities and clinical status for \code{col_1} (included
+when \code{include_marginals = TRUE}).
+\item \code{median_2}, \code{lower_2}, \code{upper_2}, \code{pd_2}: Posterior median, credible
+interval bounds, and marginal Probability of Direction for \code{col_2}.
+\item \code{improvement_pct_2}, \code{deterioration_pct_2}, \code{clinical_status_2}:
+Marginal ROPE probabilities and clinical status for \code{col_2} (included
+when \code{include_marginals = TRUE}).
+\item \code{joint_pd}: Joint Probability of Direction (proportion of draws where
+both outcomes simultaneously lie on their respective dominant sides).
+\item \code{joint_improvement_pct}: Proportion of draws where both outcomes
+simultaneously exceed their ROPE in the beneficial direction.
+\item \code{joint_deterioration_pct}: Proportion of draws where both outcomes
+simultaneously exceed their ROPE in the detrimental direction.
+\item \code{joint_clinical_status}: Character classification of joint status
+(\code{"Significant Improvement"}, \code{"Likely Improvement"},
+\code{"Significant Deterioration"}, \code{"Likely Deterioration"}, or
+\code{"Undecided"}).
+}
 }
 \description{
-This function calculates the joint probability of clinical success (or deterioration)
-across two co-primary endpoints. By evaluating the condition row-wise (per MCMC draw),
-it naturally accounts for the correlation between the two posterior distributions.
-It calculates the marginal Probability of Direction (pd) for each outcome, as well
-as the \code{joint_pd} (the probability that both effects are simultaneously in their
-respective dominant directions). Optionally, marginal clinical certainties for each
-individual outcome can be returned.
+Calculates the joint probability of clinical success (or deterioration)
+across two co-primary endpoints. By evaluating the condition row-wise (per
+MCMC draw), it naturally accounts for the correlation between the two
+posterior distributions. Calculates the marginal Probability of Direction
+(pd) for each outcome, as well as the \code{joint_pd} (the probability that both
+effects are simultaneously in their respective dominant directions).
+Optionally, marginal clinical certainties for each individual outcome can be
+returned.
+
+Supports both ungrouped data frames (single participant) and grouped data
+frames or \code{.by} specifications (multiple participants), allowing it to be
+piped directly after \code{tidybayes} draw-generating functions.
 }
 \examples{
-# Simulate correlated posterior draws
+# 1. Single participant workflow
 set.seed(123)
 df_patient <- tibble::tibble(
-  wellbeing = rnorm(4000, mean = 5, sd = 2),       # higher is better
-  depression = wellbeing * -0.8 + rnorm(4000, 0, 1) # lower is better
+  wellbeing = stats::rnorm(4000, mean = 5, sd = 2),
+  depression = wellbeing * -0.8 + stats::rnorm(4000, 0, 1)
 )
 
 # Default: Only joint certainties, pds, and base descriptives
@@ -70,4 +122,27 @@ df_patient |>
     ranges = list(c(-2, 2), c(-1, 1)),
     include_marginals = TRUE
   )
+
+# 2. Multiple participants using `.by` or `dplyr::group_by()`
+df_multi <- tibble::tibble(
+  id = rep(c("P1", "P2"), each = 1000),
+  wellbeing = c(
+    stats::rnorm(1000, mean = 5, sd = 1),
+    stats::rnorm(1000, mean = 0, sd = 1)
+  ),
+  depression = c(
+    stats::rnorm(1000, mean = -4, sd = 1),
+    stats::rnorm(1000, mean = 0, sd = 1)
+  )
+)
+
+df_multi |>
+  get_joint_clinical_certainty(
+    col_1 = wellbeing,
+    col_2 = depression,
+    .by = id,
+    better_is = c("higher", "lower"),
+    ranges = list(c(-2, 2), c(-1, 1))
+  )
+
 }
