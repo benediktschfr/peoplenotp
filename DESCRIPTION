@@ -24,6 +24,7 @@ Imports:
     dplyr,
     ggplot2,
     insight,
+    patchwork,
     purrr,
     rcartocolor,
     rlang,
