@@ -16,11 +16,13 @@
 #' @export
 #'
 #' @examples
+#' \dontrun{
 #' # Only run this example if the 'Rubik' font is installed on the system
 #' if ("Rubik" %in% systemfonts::system_fonts()$family) {
-#'   ggplot(mtcars, aes(wt, mpg, color = factor(cyl))) +
-#'     geom_point() +
+#'   ggplot2::ggplot(mtcars, ggplot2::aes(wt, mpg, color = factor(cyl))) +
+#'     ggplot2::geom_point() +
 #'     theme_peoplenotp()
+#' }
 #' }
 theme_peoplenotp <- function(
   base_family = "Rubik",

@@ -1,4 +1,4 @@
-test_that("get_joint_clinical_certainty() works for a single participant (ungrouped)", {
+test_that("get_joint_clinical_certainty() works for a single participant with reduced default columns", {
   set.seed(123)
   df_single <- tibble::tibble(
     wellbeing = stats::rnorm(1000, mean = 5, sd = 0.5),
@@ -21,23 +21,40 @@ test_that("get_joint_clinical_certainty() works for a single participant (ungrou
       "median_1",
       "lower_1",
       "upper_1",
-      "pd_1",
       "median_2",
       "lower_2",
       "upper_2",
-      "pd_2",
       "joint_pd",
       "joint_improvement_pct",
-      "joint_deterioration_pct",
-      "joint_clinical_status"
+      "joint_deterioration_pct"
     )
   )
-  expect_identical(res$joint_clinical_status, "Significant Improvement")
-  expect_equal(res$pd_1, 1)
-  expect_equal(res$pd_2, 1)
   expect_equal(res$joint_pd, 1)
   expect_equal(res$joint_improvement_pct, 1)
   expect_equal(res$joint_deterioration_pct, 0)
+  expect_false("joint_clinical_status" %in% names(res))
+  expect_false("pd_1" %in% names(res))
+  expect_false("pd_2" %in% names(res))
+})
+
+test_that("get_joint_clinical_certainty() appends joint_clinical_status when include_status = TRUE", {
+  set.seed(123)
+  df_single <- tibble::tibble(
+    wellbeing = stats::rnorm(1000, mean = 5, sd = 0.5),
+    depression = stats::rnorm(1000, mean = -4, sd = 0.5)
+  )
+
+  res <- get_joint_clinical_certainty(
+    df_single,
+    col_1 = wellbeing,
+    col_2 = depression,
+    better_is = c("higher", "lower"),
+    ranges = list(c(-2, 2), c(-1, 1)),
+    include_status = TRUE
+  )
+
+  expect_true("joint_clinical_status" %in% names(res))
+  expect_identical(res$joint_clinical_status, "Significant Improvement")
 })
 
 test_that("get_joint_clinical_certainty() appends marginal metrics when include_marginals = TRUE", {
@@ -53,7 +70,8 @@ test_that("get_joint_clinical_certainty() appends marginal metrics when include_
     col_2 = depression,
     better_is = c("higher", "lower"),
     ranges = list(c(-2, 2), c(-1, 1)),
-    include_marginals = TRUE
+    include_marginals = TRUE,
+    include_status = TRUE
   )
 
   expect_named(
@@ -106,7 +124,8 @@ test_that("get_joint_clinical_certainty() supports .by for multi-participant sum
       col_2 = depression,
       .by = id,
       better_is = c("higher", "lower"),
-      ranges = list(c(-1, 1), c(-1, 1))
+      ranges = list(c(-1, 1), c(-1, 1)),
+      include_status = TRUE
     )
 
   expect_s3_class(res, "tbl_df")
@@ -140,7 +159,8 @@ test_that("get_joint_clinical_certainty() respects dplyr::group_by() and strips 
       col_1 = outcome_1,
       col_2 = outcome_2,
       better_is = c("higher", "higher"),
-      ranges = list(c(-1, 1), c(-1, 1))
+      ranges = list(c(-1, 1), c(-1, 1)),
+      include_status = TRUE
     )
 
   expect_s3_class(res_grouped, "tbl_df")
@@ -160,7 +180,8 @@ test_that("get_joint_clinical_certainty() respects dplyr::group_by() and strips 
       col_2 = outcome_2,
       .by = id,
       better_is = c("higher", "higher"),
-      ranges = list(c(-1, 1), c(-1, 1))
+      ranges = list(c(-1, 1), c(-1, 1)),
+      include_status = TRUE
     )
 
   expect_identical(res_grouped, res_by_override)
@@ -241,5 +262,15 @@ test_that("get_joint_clinical_certainty() validates arguments with informative c
       include_marginals = NA
     ),
     class = "peoplenotp_error_bad_include_marginals"
+  )
+
+  expect_error(
+    get_joint_clinical_certainty(
+      df_valid,
+      col_1 = y1,
+      col_2 = y2,
+      include_status = NA
+    ),
+    class = "peoplenotp_error_bad_include_status"
   )
 })

@@ -4,10 +4,9 @@
 #' Calculates the joint probability of clinical success (or deterioration)
 #' across two co-primary endpoints. By evaluating the condition row-wise (per
 #' MCMC draw), it naturally accounts for the correlation between the two
-#' posterior distributions. Calculates the marginal Probability of Direction
-#' (pd) for each outcome, as well as the `joint_pd` (the probability that both
-#' effects are simultaneously in their respective dominant directions).
-#' Optionally, marginal clinical certainties for each individual outcome can be
+#' posterior distributions. Calculates the joint Probability of Direction
+#' (`joint_pd`), joint improvement percentage, and joint deterioration
+#' percentage. Optionally, marginal statistics and clinical statuses can be
 #' returned.
 #'
 #' Supports both ungrouped data frames (single participant) and grouped data
@@ -42,21 +41,29 @@
 #'   `"Significant"` categories, in the order
 #'   `c(likely_boundary, significant_boundary)`. Defaults to `c(0.975, 0.99)`.
 #' @param include_marginals A single logical flag. If `TRUE`, the output also
-#'   includes the marginal ROPE probabilities and clinical statuses for each
-#'   individual outcome. Defaults to `FALSE`.
+#'   includes marginal statistics (`pd`, `improvement_pct`, and
+#'   `deterioration_pct`) for each individual outcome. Defaults to `FALSE`.
+#' @param include_status A single logical flag indicating whether categorical
+#'   clinical status classifications (`joint_clinical_status`, and marginal
+#'   statuses if `include_marginals = TRUE`) should be included in the output.
+#'   Defaults to `FALSE`.
 #'
 #' @return A [tibble::tibble()] with one row per group (or a single row if
 #'   ungrouped) containing any grouping columns along with:
-#'   * `median_1`, `lower_1`, `upper_1`, `pd_1`: Posterior median, credible
-#'     interval bounds, and marginal Probability of Direction for `col_1`.
-#'   * `improvement_pct_1`, `deterioration_pct_1`, `clinical_status_1`:
-#'     Marginal ROPE probabilities and clinical status for `col_1` (included
-#'     when `include_marginals = TRUE`).
-#'   * `median_2`, `lower_2`, `upper_2`, `pd_2`: Posterior median, credible
-#'     interval bounds, and marginal Probability of Direction for `col_2`.
-#'   * `improvement_pct_2`, `deterioration_pct_2`, `clinical_status_2`:
-#'     Marginal ROPE probabilities and clinical status for `col_2` (included
-#'     when `include_marginals = TRUE`).
+#'   * `median_1`, `lower_1`, `upper_1`: Posterior median and credible
+#'     interval bounds for `col_1`.
+#'   * `pd_1`, `improvement_pct_1`, `deterioration_pct_1`:
+#'     Marginal Probability of Direction and ROPE probabilities for `col_1`
+#'     (included when `include_marginals = TRUE`).
+#'   * `clinical_status_1`: Marginal clinical status for `col_1` (included when
+#'     `include_marginals = TRUE` and `include_status = TRUE`).
+#'   * `median_2`, `lower_2`, `upper_2`: Posterior median and credible
+#'     interval bounds for `col_2`.
+#'   * `pd_2`, `improvement_pct_2`, `deterioration_pct_2`:
+#'     Marginal Probability of Direction and ROPE probabilities for `col_2`
+#'     (included when `include_marginals = TRUE`).
+#'   * `clinical_status_2`: Marginal clinical status for `col_2` (included when
+#'     `include_marginals = TRUE` and `include_status = TRUE`).
 #'   * `joint_pd`: Joint Probability of Direction (proportion of draws where
 #'     both outcomes simultaneously lie on their respective dominant sides).
 #'   * `joint_improvement_pct`: Proportion of draws where both outcomes
@@ -66,7 +73,7 @@
 #'   * `joint_clinical_status`: Character classification of joint status
 #'     (`"Significant Improvement"`, `"Likely Improvement"`,
 #'     `"Significant Deterioration"`, `"Likely Deterioration"`, or
-#'     `"Undecided"`).
+#'     `"Undecided"`, included when `include_status = TRUE`).
 #'
 #' @examples
 #' # 1. Single participant workflow
@@ -76,7 +83,7 @@
 #'   depression = wellbeing * -0.8 + stats::rnorm(4000, 0, 1)
 #' )
 #'
-#' # Default: Only joint certainties, pds, and base descriptives
+#' # Default: Medians, CrIs, and joint statistics
 #' df_patient |>
 #'   get_joint_clinical_certainty(
 #'     col_1 = wellbeing,
@@ -85,14 +92,15 @@
 #'     ranges = list(c(-2, 2), c(-1, 1))
 #'   )
 #'
-#' # Extended: Include marginal certainties for plotting/summaries
+#' # Extended: Include marginal statistics and clinical status
 #' df_patient |>
 #'   get_joint_clinical_certainty(
 #'     col_1 = wellbeing,
 #'     col_2 = depression,
 #'     better_is = c("higher", "lower"),
 #'     ranges = list(c(-2, 2), c(-1, 1)),
-#'     include_marginals = TRUE
+#'     include_marginals = TRUE,
+#'     include_status = TRUE
 #'   )
 #'
 #' # 2. Multiple participants using `.by` or `dplyr::group_by()`
@@ -127,7 +135,8 @@ get_joint_clinical_certainty <- function(
   ranges = list(c(-1, 1), c(-1, 1)),
   ci_width = 0.95,
   certainty_boundaries = c(0.975, 0.99),
-  include_marginals = FALSE
+  include_marginals = FALSE,
+  include_status = FALSE
 ) {
   if (!is.data.frame(data)) {
     cli::cli_abort(
@@ -219,6 +228,20 @@ get_joint_clinical_certainty <- function(
     )
   }
 
+  if (
+    !is.logical(include_status) ||
+      length(include_status) != 1L ||
+      is.na(include_status)
+  ) {
+    cli::cli_abort(
+      c(
+        "x" = "Argument {.arg include_status} must be a single non-missing logical value (`TRUE` or `FALSE`).",
+        "i" = "Received {.val {include_status}}."
+      ),
+      class = "peoplenotp_error_bad_include_status"
+    )
+  }
+
   col_1_quo <- rlang::enquo(col_1)
   col_2_quo <- rlang::enquo(col_2)
   by_quo <- rlang::enquo(.by)
@@ -272,7 +295,8 @@ get_joint_clinical_certainty <- function(
       ranges = ranges,
       ci_width = ci_width,
       certainty_boundaries = certainty_boundaries,
-      include_marginals = include_marginals
+      include_marginals = include_marginals,
+      include_status = include_status
     ),
     .by = !!by_quo
   )
@@ -289,7 +313,9 @@ get_joint_clinical_certainty <- function(
 #' @param ci_width Numeric scalar for credible interval width.
 #' @param certainty_boundaries Numeric vector of length 2 for thresholds.
 #' @param include_marginals Logical scalar indicating whether to include
-#'   marginal ROPE probabilities and clinical statuses.
+#'   marginal statistics.
+#' @param include_status Logical scalar indicating whether to include
+#'   clinical statuses.
 #'
 #' @return A single-row [tibble::tibble()] of summary metrics.
 #' @noRd
@@ -300,7 +326,8 @@ compute_joint_certainty_draws <- function(
   ranges,
   ci_width,
   certainty_boundaries,
-  include_marginals
+  include_marginals,
+  include_status
 ) {
   pd_1_pos <- mean(draws1 > 0, na.rm = TRUE)
   pd_1_neg <- mean(draws1 < 0, na.rm = TRUE)
@@ -340,64 +367,59 @@ compute_joint_certainty_draws <- function(
   bound_likely <- certainty_boundaries[[1]]
   bound_signif <- certainty_boundaries[[2]]
 
-  joint_clinical_status <- assign_clinical_status(
-    imp_pct = joint_imp_pct,
-    det_pct = joint_det_pct,
-    bound_likely = bound_likely,
-    bound_signif = bound_signif
-  )
-
   e1 <- tidybayes::median_qi(draws1, .width = ci_width)
   e2 <- tidybayes::median_qi(draws2, .width = ci_width)
 
-  if (include_marginals) {
-    status_1 <- assign_clinical_status(
-      imp_pct = imp_pct_1,
-      det_pct = det_pct_1,
-      bound_likely = bound_likely,
-      bound_signif = bound_signif
-    )
-    status_2 <- assign_clinical_status(
-      imp_pct = imp_pct_2,
-      det_pct = det_pct_2,
-      bound_likely = bound_likely,
-      bound_signif = bound_signif
-    )
+  res_list <- list(
+    median_1 = e1$y,
+    lower_1 = e1$ymin,
+    upper_1 = e1$ymax
+  )
 
-    tibble::tibble(
-      median_1 = e1$y,
-      lower_1 = e1$ymin,
-      upper_1 = e1$ymax,
-      pd_1 = pd_1,
-      improvement_pct_1 = imp_pct_1,
-      deterioration_pct_1 = det_pct_1,
-      clinical_status_1 = status_1,
-      median_2 = e2$y,
-      lower_2 = e2$ymin,
-      upper_2 = e2$ymax,
-      pd_2 = pd_2,
-      improvement_pct_2 = imp_pct_2,
-      deterioration_pct_2 = det_pct_2,
-      clinical_status_2 = status_2,
-      joint_pd = joint_pd,
-      joint_improvement_pct = joint_imp_pct,
-      joint_deterioration_pct = joint_det_pct,
-      joint_clinical_status = joint_clinical_status
-    )
-  } else {
-    tibble::tibble(
-      median_1 = e1$y,
-      lower_1 = e1$ymin,
-      upper_1 = e1$ymax,
-      pd_1 = pd_1,
-      median_2 = e2$y,
-      lower_2 = e2$ymin,
-      upper_2 = e2$ymax,
-      pd_2 = pd_2,
-      joint_pd = joint_pd,
-      joint_improvement_pct = joint_imp_pct,
-      joint_deterioration_pct = joint_det_pct,
-      joint_clinical_status = joint_clinical_status
+  if (include_marginals) {
+    res_list$pd_1 <- pd_1
+    res_list$improvement_pct_1 <- imp_pct_1
+    res_list$deterioration_pct_1 <- det_pct_1
+    if (include_status) {
+      res_list$clinical_status_1 <- assign_clinical_status(
+        imp_pct = imp_pct_1,
+        det_pct = det_pct_1,
+        bound_likely = bound_likely,
+        bound_signif = bound_signif
+      )
+    }
+  }
+
+  res_list$median_2 <- e2$y
+  res_list$lower_2 <- e2$ymin
+  res_list$upper_2 <- e2$ymax
+
+  if (include_marginals) {
+    res_list$pd_2 <- pd_2
+    res_list$improvement_pct_2 <- imp_pct_2
+    res_list$deterioration_pct_2 <- det_pct_2
+    if (include_status) {
+      res_list$clinical_status_2 <- assign_clinical_status(
+        imp_pct = imp_pct_2,
+        det_pct = det_pct_2,
+        bound_likely = bound_likely,
+        bound_signif = bound_signif
+      )
+    }
+  }
+
+  res_list$joint_pd <- joint_pd
+  res_list$joint_improvement_pct <- joint_imp_pct
+  res_list$joint_deterioration_pct <- joint_det_pct
+
+  if (include_status) {
+    res_list$joint_clinical_status <- assign_clinical_status(
+      imp_pct = joint_imp_pct,
+      det_pct = joint_det_pct,
+      bound_likely = bound_likely,
+      bound_signif = bound_signif
     )
   }
+
+  tibble::as_tibble(res_list)
 }

@@ -1,4 +1,4 @@
-test_that("get_clinical_certainty() works for a single participant (ungrouped)", {
+test_that("get_clinical_certainty() works for a single participant with reduced default columns", {
   set.seed(123)
   df_single <- tibble::tibble(
     iteration = 1:1000,
@@ -21,20 +21,50 @@ test_that("get_clinical_certainty() works for a single participant (ungrouped)",
       "lower",
       "upper",
       "pd",
-      "rope_low",
-      "rope_high",
-      "rope_pct",
       "improvement_pct",
-      "deterioration_pct",
-      "clinical_status"
+      "deterioration_pct"
     )
   )
-  expect_identical(res$clinical_status, "Significant Improvement")
-  expect_identical(res$rope_low, -2)
-  expect_identical(res$rope_high, 2)
   expect_equal(res$pd, 1)
   expect_equal(res$improvement_pct, 1)
   expect_equal(res$deterioration_pct, 0)
+  expect_false("clinical_status" %in% names(res))
+  expect_false(any(c("rope_low", "rope_high", "rope_pct") %in% names(res)))
+})
+
+test_that("get_clinical_certainty() includes clinical_status when include_status = TRUE", {
+  set.seed(123)
+  df_single <- tibble::tibble(
+    score_difference = stats::rnorm(1000, mean = 5, sd = 0.5)
+  )
+
+  res <- get_clinical_certainty(
+    df_single,
+    col = score_difference,
+    range = c(-2, 2),
+    include_status = TRUE
+  )
+
+  expect_true("clinical_status" %in% names(res))
+  expect_identical(res$clinical_status, "Significant Improvement")
+})
+
+test_that("get_clinical_certainty() includes ROPE bounds when include_rope = TRUE", {
+  set.seed(123)
+  df_single <- tibble::tibble(
+    score_difference = stats::rnorm(1000, mean = 5, sd = 0.5)
+  )
+
+  res <- get_clinical_certainty(
+    df_single,
+    col = score_difference,
+    range = c(-2, 2),
+    include_rope = TRUE
+  )
+
+  expect_true(all(c("rope_low", "rope_high", "rope_pct") %in% names(res)))
+  expect_identical(res$rope_low, -2)
+  expect_identical(res$rope_high, 2)
   expect_equal(res$rope_pct, 0)
 })
 
@@ -53,7 +83,8 @@ test_that("get_clinical_certainty() defaults col to .epred and supports .by", {
     get_clinical_certainty(
       .by = id,
       better_is = "higher",
-      range = c(-1, 1)
+      range = c(-1, 1),
+      include_status = TRUE
     )
 
   expect_s3_class(res, "tbl_df")
@@ -79,7 +110,7 @@ test_that("get_clinical_certainty() respects dplyr::group_by() and strips .row f
     dplyr::group_by(id, .row)
 
   res_grouped <- df_epred |>
-    get_clinical_certainty(range = c(-1, 1))
+    get_clinical_certainty(range = c(-1, 1), include_status = TRUE)
 
   expect_s3_class(res_grouped, "tbl_df")
   expect_false(dplyr::is_grouped_df(res_grouped))
@@ -93,12 +124,12 @@ test_that("get_clinical_certainty() respects dplyr::group_by() and strips .row f
 
   # Providing .by overrides existing group_by()
   res_by_override <- df_epred |>
-    get_clinical_certainty(.by = id, range = c(-1, 1))
+    get_clinical_certainty(.by = id, range = c(-1, 1), include_status = TRUE)
 
   expect_identical(res_grouped, res_by_override)
 })
 
-test_that("get_clinical_certainty() handles better_is = 'lower' and include_rope = FALSE", {
+test_that("get_clinical_certainty() handles better_is = 'lower'", {
   set.seed(101)
   df_pain <- tibble::tibble(
     .epred = stats::rnorm(1000, mean = -4, sd = 0.5)
@@ -108,7 +139,7 @@ test_that("get_clinical_certainty() handles better_is = 'lower' and include_rope
     df_pain,
     better_is = "lower",
     range = c(-1, 1),
-    include_rope = FALSE
+    include_status = TRUE
   )
 
   expect_identical(res$clinical_status, "Significant Improvement")
@@ -158,5 +189,10 @@ test_that("get_clinical_certainty() validates arguments with informative cli err
   expect_error(
     get_clinical_certainty(df_valid, include_rope = NA),
     class = "peoplenotp_error_bad_include_rope"
+  )
+
+  expect_error(
+    get_clinical_certainty(df_valid, include_status = NA),
+    class = "peoplenotp_error_bad_include_status"
   )
 })

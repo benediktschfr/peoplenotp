@@ -12,7 +12,8 @@ get_clinical_certainty(
   range = c(-1, 1),
   ci_width = 0.95,
   certainty_boundaries = c(0.975, 0.99),
-  include_rope = TRUE
+  include_rope = FALSE,
+  include_status = FALSE
 )
 }
 \arguments{
@@ -50,7 +51,12 @@ in the order \code{c(likely_boundary, significant_boundary)}. Defaults to
 
 \item{include_rope}{A single logical flag indicating whether the ROPE
 boundaries (\code{rope_low}, \code{rope_high}) and the proportion of draws within
-the ROPE (\code{rope_pct}) should be included in the output. Defaults to \code{TRUE}.}
+the ROPE (\code{rope_pct}) should be included in the output. Defaults to
+\code{FALSE}.}
+
+\item{include_status}{A single logical flag indicating whether the
+categorical clinical status (\code{clinical_status}) should be included in the
+output. Defaults to \code{FALSE}.}
 }
 \value{
 A \code{\link[tibble:tibble]{tibble::tibble()}} with one row per group (or a single row if
@@ -61,16 +67,17 @@ ungrouped) containing any grouping columns along with:
 \item \code{upper}: Upper bound of the credible interval.
 \item \code{pd}: Probability of Direction (maximum of the proportion of draws
 strictly greater than 0 or strictly less than 0).
-\item \code{rope_low}, \code{rope_high}, \code{rope_pct}: Lower ROPE bound, upper ROPE bound,
-and proportion of draws within the ROPE (included when
-\code{include_rope = TRUE}).
 \item \code{improvement_pct}: Proportion of draws exceeding the ROPE in the
 beneficial direction.
 \item \code{deterioration_pct}: Proportion of draws exceeding the ROPE in the
 detrimental direction.
+\item \code{rope_low}, \code{rope_high}, \code{rope_pct}: Lower ROPE bound, upper ROPE bound,
+and proportion of draws within the ROPE (included when
+\code{include_rope = TRUE}).
 \item \code{clinical_status}: Character classification (\code{"Significant Improvement"},
 \code{"Likely Improvement"}, \code{"Significant Deterioration"},
-\code{"Likely Deterioration"}, or \code{"Undecided"}).
+\code{"Likely Deterioration"}, or \code{"Undecided"}, included when
+\code{include_status = TRUE}).
 }
 }
 \description{
@@ -113,7 +120,8 @@ df_multi |>
   get_clinical_certainty(
     .by = id,
     better_is = "higher",
-    range = c(-2, 2)
+    range = c(-2, 2),
+    include_status = TRUE
   )
 
 }

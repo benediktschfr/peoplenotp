@@ -13,7 +13,8 @@ get_joint_clinical_certainty(
   ranges = list(c(-1, 1), c(-1, 1)),
   ci_width = 0.95,
   certainty_boundaries = c(0.975, 0.99),
-  include_marginals = FALSE
+  include_marginals = FALSE,
+  include_status = FALSE
 )
 }
 \arguments{
@@ -53,23 +54,32 @@ probability thresholds (between 0 and 1) for assigning \code{"Likely"} and
 \code{c(likely_boundary, significant_boundary)}. Defaults to \code{c(0.975, 0.99)}.}
 
 \item{include_marginals}{A single logical flag. If \code{TRUE}, the output also
-includes the marginal ROPE probabilities and clinical statuses for each
-individual outcome. Defaults to \code{FALSE}.}
+includes marginal statistics (\code{pd}, \code{improvement_pct}, and
+\code{deterioration_pct}) for each individual outcome. Defaults to \code{FALSE}.}
+
+\item{include_status}{A single logical flag indicating whether categorical
+clinical status classifications (\code{joint_clinical_status}, and marginal
+statuses if \code{include_marginals = TRUE}) should be included in the output.
+Defaults to \code{FALSE}.}
 }
 \value{
 A \code{\link[tibble:tibble]{tibble::tibble()}} with one row per group (or a single row if
 ungrouped) containing any grouping columns along with:
 \itemize{
-\item \code{median_1}, \code{lower_1}, \code{upper_1}, \code{pd_1}: Posterior median, credible
-interval bounds, and marginal Probability of Direction for \code{col_1}.
-\item \code{improvement_pct_1}, \code{deterioration_pct_1}, \code{clinical_status_1}:
-Marginal ROPE probabilities and clinical status for \code{col_1} (included
-when \code{include_marginals = TRUE}).
-\item \code{median_2}, \code{lower_2}, \code{upper_2}, \code{pd_2}: Posterior median, credible
-interval bounds, and marginal Probability of Direction for \code{col_2}.
-\item \code{improvement_pct_2}, \code{deterioration_pct_2}, \code{clinical_status_2}:
-Marginal ROPE probabilities and clinical status for \code{col_2} (included
-when \code{include_marginals = TRUE}).
+\item \code{median_1}, \code{lower_1}, \code{upper_1}: Posterior median and credible
+interval bounds for \code{col_1}.
+\item \code{pd_1}, \code{improvement_pct_1}, \code{deterioration_pct_1}:
+Marginal Probability of Direction and ROPE probabilities for \code{col_1}
+(included when \code{include_marginals = TRUE}).
+\item \code{clinical_status_1}: Marginal clinical status for \code{col_1} (included when
+\code{include_marginals = TRUE} and \code{include_status = TRUE}).
+\item \code{median_2}, \code{lower_2}, \code{upper_2}: Posterior median and credible
+interval bounds for \code{col_2}.
+\item \code{pd_2}, \code{improvement_pct_2}, \code{deterioration_pct_2}:
+Marginal Probability of Direction and ROPE probabilities for \code{col_2}
+(included when \code{include_marginals = TRUE}).
+\item \code{clinical_status_2}: Marginal clinical status for \code{col_2} (included when
+\code{include_marginals = TRUE} and \code{include_status = TRUE}).
 \item \code{joint_pd}: Joint Probability of Direction (proportion of draws where
 both outcomes simultaneously lie on their respective dominant sides).
 \item \code{joint_improvement_pct}: Proportion of draws where both outcomes
@@ -79,17 +89,16 @@ simultaneously exceed their ROPE in the detrimental direction.
 \item \code{joint_clinical_status}: Character classification of joint status
 (\code{"Significant Improvement"}, \code{"Likely Improvement"},
 \code{"Significant Deterioration"}, \code{"Likely Deterioration"}, or
-\code{"Undecided"}).
+\code{"Undecided"}, included when \code{include_status = TRUE}).
 }
 }
 \description{
 Calculates the joint probability of clinical success (or deterioration)
 across two co-primary endpoints. By evaluating the condition row-wise (per
 MCMC draw), it naturally accounts for the correlation between the two
-posterior distributions. Calculates the marginal Probability of Direction
-(pd) for each outcome, as well as the \code{joint_pd} (the probability that both
-effects are simultaneously in their respective dominant directions).
-Optionally, marginal clinical certainties for each individual outcome can be
+posterior distributions. Calculates the joint Probability of Direction
+(\code{joint_pd}), joint improvement percentage, and joint deterioration
+percentage. Optionally, marginal statistics and clinical statuses can be
 returned.
 
 Supports both ungrouped data frames (single participant) and grouped data
@@ -104,7 +113,7 @@ df_patient <- tibble::tibble(
   depression = wellbeing * -0.8 + stats::rnorm(4000, 0, 1)
 )
 
-# Default: Only joint certainties, pds, and base descriptives
+# Default: Medians, CrIs, and joint statistics
 df_patient |>
   get_joint_clinical_certainty(
     col_1 = wellbeing,
@@ -113,14 +122,15 @@ df_patient |>
     ranges = list(c(-2, 2), c(-1, 1))
   )
 
-# Extended: Include marginal certainties for plotting/summaries
+# Extended: Include marginal statistics and clinical status
 df_patient |>
   get_joint_clinical_certainty(
     col_1 = wellbeing,
     col_2 = depression,
     better_is = c("higher", "lower"),
     ranges = list(c(-2, 2), c(-1, 1)),
-    include_marginals = TRUE
+    include_marginals = TRUE,
+    include_status = TRUE
   )
 
 # 2. Multiple participants using `.by` or `dplyr::group_by()`

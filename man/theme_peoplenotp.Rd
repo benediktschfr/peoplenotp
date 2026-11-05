@@ -35,10 +35,12 @@ It removes distracting elements like facet background boxes, properly justifies
 titles, and sets default palettes and geom colors natively.
 }
 \examples{
+\dontrun{
 # Only run this example if the 'Rubik' font is installed on the system
 if ("Rubik" \%in\% systemfonts::system_fonts()$family) {
-  ggplot(mtcars, aes(wt, mpg, color = factor(cyl))) +
-    geom_point() +
+  ggplot2::ggplot(mtcars, ggplot2::aes(wt, mpg, color = factor(cyl))) +
+    ggplot2::geom_point() +
     theme_peoplenotp()
+}
 }
 }

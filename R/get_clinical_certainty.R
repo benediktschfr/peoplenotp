@@ -38,7 +38,11 @@
 #'   `c(0.975, 0.99)`.
 #' @param include_rope A single logical flag indicating whether the ROPE
 #'   boundaries (`rope_low`, `rope_high`) and the proportion of draws within
-#'   the ROPE (`rope_pct`) should be included in the output. Defaults to `TRUE`.
+#'   the ROPE (`rope_pct`) should be included in the output. Defaults to
+#'   `FALSE`.
+#' @param include_status A single logical flag indicating whether the
+#'   categorical clinical status (`clinical_status`) should be included in the
+#'   output. Defaults to `FALSE`.
 #'
 #' @return A [tibble::tibble()] with one row per group (or a single row if
 #'   ungrouped) containing any grouping columns along with:
@@ -47,16 +51,17 @@
 #'   * `upper`: Upper bound of the credible interval.
 #'   * `pd`: Probability of Direction (maximum of the proportion of draws
 #'     strictly greater than 0 or strictly less than 0).
-#'   * `rope_low`, `rope_high`, `rope_pct`: Lower ROPE bound, upper ROPE bound,
-#'     and proportion of draws within the ROPE (included when
-#'     `include_rope = TRUE`).
 #'   * `improvement_pct`: Proportion of draws exceeding the ROPE in the
 #'     beneficial direction.
 #'   * `deterioration_pct`: Proportion of draws exceeding the ROPE in the
 #'     detrimental direction.
+#'   * `rope_low`, `rope_high`, `rope_pct`: Lower ROPE bound, upper ROPE bound,
+#'     and proportion of draws within the ROPE (included when
+#'     `include_rope = TRUE`).
 #'   * `clinical_status`: Character classification (`"Significant Improvement"`,
 #'     `"Likely Improvement"`, `"Significant Deterioration"`,
-#'     `"Likely Deterioration"`, or `"Undecided"`).
+#'     `"Likely Deterioration"`, or `"Undecided"`, included when
+#'     `include_status = TRUE`).
 #'
 #' @examples
 #' # 1. Single participant workflow
@@ -87,7 +92,8 @@
 #'   get_clinical_certainty(
 #'     .by = id,
 #'     better_is = "higher",
-#'     range = c(-2, 2)
+#'     range = c(-2, 2),
+#'     include_status = TRUE
 #'   )
 #'
 #' @export
@@ -99,7 +105,8 @@ get_clinical_certainty <- function(
   range = c(-1, 1),
   ci_width = 0.95,
   certainty_boundaries = c(0.975, 0.99),
-  include_rope = TRUE
+  include_rope = FALSE,
+  include_status = FALSE
 ) {
   if (!is.data.frame(data)) {
     cli::cli_abort(
@@ -188,6 +195,20 @@ get_clinical_certainty <- function(
     )
   }
 
+  if (
+    !is.logical(include_status) ||
+      length(include_status) != 1L ||
+      is.na(include_status)
+  ) {
+    cli::cli_abort(
+      c(
+        "x" = "Argument {.arg include_status} must be a single non-missing logical value (`TRUE` or `FALSE`).",
+        "i" = "Received {.val {include_status}}."
+      ),
+      class = "peoplenotp_error_bad_include_status"
+    )
+  }
+
   col_quo <- rlang::enquo(col)
   by_quo <- rlang::enquo(.by)
 
@@ -235,7 +256,8 @@ get_clinical_certainty <- function(
       range = range,
       ci_width = ci_width,
       certainty_boundaries = certainty_boundaries,
-      include_rope = include_rope
+      include_rope = include_rope,
+      include_status = include_status
     ),
     .by = !!by_quo
   )
@@ -251,6 +273,7 @@ get_clinical_certainty <- function(
 #' @param ci_width Numeric scalar for credible interval width.
 #' @param certainty_boundaries Numeric vector of length 2 for thresholds.
 #' @param include_rope Logical scalar indicating whether to include ROPE columns.
+#' @param include_status Logical scalar indicating whether to include clinical_status.
 #'
 #' @return A single-row [tibble::tibble()] of summary metrics.
 #' @noRd
@@ -260,7 +283,8 @@ compute_certainty_draws <- function(
   range,
   ci_width,
   certainty_boundaries,
-  include_rope
+  include_rope,
+  include_status
 ) {
   pd_val <- max(
     mean(posterior_draws > 0, na.rm = TRUE),
@@ -275,42 +299,35 @@ compute_certainty_draws <- function(
     det_pct <- mean(posterior_draws > range[2], na.rm = TRUE)
   }
 
-  status <- assign_clinical_status(
-    imp_pct = imp_pct,
-    det_pct = det_pct,
-    bound_likely = certainty_boundaries[[1]],
-    bound_signif = certainty_boundaries[[2]]
-  )
-
   effect <- tidybayes::median_qi(posterior_draws, .width = ci_width)
 
+  res_list <- list(
+    median = effect$y,
+    lower = effect$ymin,
+    upper = effect$ymax,
+    pd = pd_val
+  )
+
   if (include_rope) {
-    rope_pct <- mean(
+    res_list$rope_low <- range[1]
+    res_list$rope_high <- range[2]
+    res_list$rope_pct <- mean(
       posterior_draws >= range[1] & posterior_draws <= range[2],
       na.rm = TRUE
     )
+  }
 
-    tibble::tibble(
-      median = effect$y,
-      lower = effect$ymin,
-      upper = effect$ymax,
-      pd = pd_val,
-      rope_low = range[1],
-      rope_high = range[2],
-      rope_pct = rope_pct,
-      improvement_pct = imp_pct,
-      deterioration_pct = det_pct,
-      clinical_status = status
-    )
-  } else {
-    tibble::tibble(
-      median = effect$y,
-      lower = effect$ymin,
-      upper = effect$ymax,
-      pd = pd_val,
-      improvement_pct = imp_pct,
-      deterioration_pct = det_pct,
-      clinical_status = status
+  res_list$improvement_pct <- imp_pct
+  res_list$deterioration_pct <- det_pct
+
+  if (include_status) {
+    res_list$clinical_status <- assign_clinical_status(
+      imp_pct = imp_pct,
+      det_pct = det_pct,
+      bound_likely = certainty_boundaries[[1]],
+      bound_signif = certainty_boundaries[[2]]
     )
   }
+
+  tibble::as_tibble(res_list)
 }
