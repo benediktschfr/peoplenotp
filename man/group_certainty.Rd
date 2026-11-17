@@ -4,14 +4,7 @@
 \alias{group_certainty}
 \title{Evaluate group-level Bayesian clinical certainty and heterogeneity}
 \usage{
-group_certainty(
-  model,
-  rope,
-  better_is = c("lower", "higher"),
-  parameters = NULL,
-  ci = 0.95,
-  ...
-)
+group_certainty(model, rope, parameters = NULL, ci = 0.95, ...)
 }
 \arguments{
 \item{model}{A fitted Bayesian model object supported by \code{{insight}} and
@@ -20,15 +13,6 @@ draws.}
 
 \item{rope}{Numeric vector of length 2 specifying the Region of Practical
 Equivalence, e.g., \code{c(-2.5, 2.5)}.}
-
-\item{better_is}{Character string indicating the clinical polarity of the
-outcome:
-\itemize{
-\item \code{"lower"} (default): Negative change or lower values indicate
-improvement (e.g., PHQ-9, Burnout).
-\item \code{"higher"}: Positive change or higher values indicate improvement
-(e.g., active minutes, Morning Energy).
-}}
 
 \item{parameters}{Optional character vector or regular expression pattern to
 filter target fixed-effect parameters. Defaults to \code{NULL} (all fixed
@@ -42,16 +26,15 @@ effects).}
 \value{
 An S3 object of class \code{c("pnp_group_certainty", "data.frame")}
 containing columns \code{parameter}, \code{effect}, \code{median}, \code{CI_low}, \code{CI_high},
-\code{pd}, \code{rope_pct}, \code{improvement_pct}, and \code{deterioration_pct}.
+\code{pd}, and \code{rope_pct}.
 }
 \description{
 Summarizes population-level (fixed) effects and inter-individual
 random-effects heterogeneity (\verb{sd__*} and \verb{cor__*}) from a fitted Bayesian
-model (such as a \code{brmsfit} object). For each fixed effect, 100\% of the
-posterior distribution is partitioned into three mutually exclusive
-directional regions (\code{improvement_pct}, \code{rope_pct}, and \code{deterioration_pct})
-based on \code{rope} and \code{better_is}, alongside the Posterior Median, Credible
-Interval (\code{CI_low}, \code{CI_high}), and Probability of Direction (\code{pd}).
+model (such as a \code{brmsfit} object). For each fixed effect, computes the
+Posterior Median, Credible Interval (\code{CI_low}, \code{CI_high}), Probability of
+Direction (\code{pd}), and the proportion of posterior draws inside the Region of
+Practical Equivalence (\code{rope_pct}).
 }
 \examples{
 \dontrun{
@@ -59,7 +42,7 @@ library(brms)
 data(burnout)
 
 fit <- brm(eei ~ time_weeks * group + (1 + time_weeks | id), data = burnout)
-group_certainty(fit, rope = c(-10, 10), better_is = "lower")
+group_certainty(fit, rope = c(-10, 10))
 }
 
 }

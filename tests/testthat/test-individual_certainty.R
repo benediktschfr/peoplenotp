@@ -43,6 +43,7 @@ test_that("individual_certainty() computes summaries, Makowski tiers, and invert
       "improvement_pct",
       "deterioration_pct",
       "directed_certainty",
+      "signed_certainty",
       "makowski_tier"
     )
   )
@@ -57,6 +58,12 @@ test_that("individual_certainty() computes summaries, Makowski tiers, and invert
   expect_equal(
     ind_sum$directed_certainty,
     pmax(ind_sum$improvement_pct, ind_sum$deterioration_pct)
+  )
+
+  # Signed certainty equals improvement_pct - deterioration_pct in [-1, 1]
+  expect_equal(
+    ind_sum$signed_certainty,
+    ind_sum$improvement_pct - ind_sum$deterioration_pct
   )
 
   # Check ordered factor levels for makowski_tier at MID = 2.5
@@ -149,6 +156,15 @@ test_that("plot.pnp_individual_certainty() builds a volcano plot with ROPE and d
     interval_alpha = 0.4
   )
   expect_s3_class(p_lower, "ggplot")
+  expect_identical(p_lower$labels$colour, "Signed Certainty")
+
+  p_tier <- plot(res_lower, mid_select = 2.5, color_by = makowski_tier)
+  expect_s3_class(p_tier, "ggplot")
+  expect_identical(p_tier$labels$colour, "Evidence Tier")
+
+  p_imp <- plot(res_lower, mid_select = 2.5, color_by = "improvement_pct")
+  expect_s3_class(p_imp, "ggplot")
+  expect_identical(p_imp$labels$colour, "% Improvement")
 
   layer_labels <- unlist(lapply(p_lower$layers, function(l) {
     l$aes_params$label
@@ -173,6 +189,11 @@ test_that("plot.pnp_individual_certainty() builds a volcano plot with ROPE and d
   expect_error(
     plot(res_lower, mid_select = 99),
     class = "peoplenotp_error_bad_mid_select"
+  )
+
+  expect_error(
+    plot(res_lower, color_by = "invalid_col"),
+    class = "peoplenotp_error_bad_color_by"
   )
 
   expect_error(

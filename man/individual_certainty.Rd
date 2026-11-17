@@ -43,7 +43,8 @@ An S3 list object of class \code{"pnp_individual_certainty"} containing:
 \item \verb{$individual_summary}: A \code{\link[tibble:tibble]{tibble::tibble()}} with one row per individual
 and \code{mid} value containing \verb{<id>}, \code{mid}, \code{median}, \code{ci_low}, \code{ci_high},
 \code{pd}, \code{rope_pct}, \code{improvement_pct}, \code{deterioration_pct},
-\code{directed_certainty}, and \code{makowski_tier} (an ordered factor).
+\code{directed_certainty}, \code{signed_certainty}, and \code{makowski_tier} (an ordered
+factor).
 \item \verb{$matrix_data}: A \code{\link[tibble:tibble]{tibble::tibble()}} representing the inverted Makowski
 Evidence Matrix crossing \code{makowski_tier} (rows) by \code{mid} thresholds
 (columns).

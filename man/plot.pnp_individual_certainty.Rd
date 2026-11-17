@@ -4,7 +4,15 @@
 \alias{plot.pnp_individual_certainty}
 \title{Plot a Bayesian Clinical Volcano Plot for \code{pnp_individual_certainty} objects}
 \usage{
-\method{plot}{pnp_individual_certainty}(x, mid_select = NULL, point_alpha = 0.85, interval_alpha = 0.5, ...)
+\method{plot}{pnp_individual_certainty}(
+  x,
+  mid_select = NULL,
+  color_by = c("signed_certainty", "pd", "makowski_tier", "rope_pct", "improvement_pct",
+    "deterioration_pct", "directed_certainty"),
+  point_alpha = 0.85,
+  interval_alpha = 0.5,
+  ...
+)
 }
 \arguments{
 \item{x}{An object of class \code{"pnp_individual_certainty"}.}
@@ -12,6 +20,12 @@
 \item{mid_select}{Optional single numeric value selecting which \code{mid}
 threshold from \code{x$meta$mid} to plot. Defaults to \code{NULL} (uses the first
 \code{mid} value in \code{x$meta$mid}).}
+
+\item{color_by}{Variable used to color both points and error bars. Can be
+supplied as a character string or unquoted name. Must be one of
+\code{"signed_certainty"} (default, ranging from \code{-1} for 100\% deterioration to
+\code{+1} for 100\% improvement), \code{"pd"}, \code{"makowski_tier"}, \code{"rope_pct"},
+\code{"improvement_pct"}, \code{"deterioration_pct"}, or \code{"directed_certainty"}.}
 
 \item{point_alpha}{Numeric in \verb{[0, 1]} controlling point opacity (default
 \code{0.85}).}
@@ -28,5 +42,6 @@ A \code{\link[ggplot2:ggplot]{ggplot2::ggplot()}} object.
 Visualizes individual posterior medians and credible intervals on the x-axis
 against \code{directed_certainty} (0\% to 100\%) on the y-axis, with vertical ROPE
 shading via \code{\link[=geom_rope]{geom_rope()}} and automatic directional annotations derived from
-\code{x$meta$better_is}.
+\code{x$meta$better_is}. Both points and horizontal error bars are colored
+according to \code{color_by}.
 }

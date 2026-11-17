@@ -28,7 +28,8 @@
 #'   * `$individual_summary`: A [tibble::tibble()] with one row per individual
 #'     and `mid` value containing `<id>`, `mid`, `median`, `ci_low`, `ci_high`,
 #'     `pd`, `rope_pct`, `improvement_pct`, `deterioration_pct`,
-#'     `directed_certainty`, and `makowski_tier` (an ordered factor).
+#'     `directed_certainty`, `signed_certainty`, and `makowski_tier` (an ordered
+#'     factor).
 #'   * `$matrix_data`: A [tibble::tibble()] representing the inverted Makowski
 #'     Evidence Matrix crossing `makowski_tier` (rows) by `mid` thresholds
 #'     (columns).
@@ -206,6 +207,7 @@ individual_certainty <- function(
       improvement_pct,
       deterioration_pct,
       directed_certainty,
+      signed_certainty,
       makowski_tier
     )
   })
@@ -332,12 +334,18 @@ summary.pnp_individual_certainty <- function(
 #' Visualizes individual posterior medians and credible intervals on the x-axis
 #' against `directed_certainty` (0% to 100%) on the y-axis, with vertical ROPE
 #' shading via [geom_rope()] and automatic directional annotations derived from
-#' `x$meta$better_is`.
+#' `x$meta$better_is`. Both points and horizontal error bars are colored
+#' according to `color_by`.
 #'
 #' @param x An object of class `"pnp_individual_certainty"`.
 #' @param mid_select Optional single numeric value selecting which `mid`
 #'   threshold from `x$meta$mid` to plot. Defaults to `NULL` (uses the first
 #'   `mid` value in `x$meta$mid`).
+#' @param color_by Variable used to color both points and error bars. Can be
+#'   supplied as a character string or unquoted name. Must be one of
+#'   `"signed_certainty"` (default, ranging from `-1` for 100% deterioration to
+#'   `+1` for 100% improvement), `"pd"`, `"makowski_tier"`, `"rope_pct"`,
+#'   `"improvement_pct"`, `"deterioration_pct"`, or `"directed_certainty"`.
 #' @param point_alpha Numeric in `[0, 1]` controlling point opacity (default
 #'   `0.85`).
 #' @param interval_alpha Numeric in `[0, 1]` controlling horizontal error bar
@@ -349,10 +357,61 @@ summary.pnp_individual_certainty <- function(
 plot.pnp_individual_certainty <- function(
   x,
   mid_select = NULL,
+  color_by = c(
+    "signed_certainty",
+    "pd",
+    "makowski_tier",
+    "rope_pct",
+    "improvement_pct",
+    "deterioration_pct",
+    "directed_certainty"
+  ),
   point_alpha = 0.85,
   interval_alpha = 0.5,
   ...
 ) {
+  allowed_colors <- c(
+    "signed_certainty",
+    "pd",
+    "makowski_tier",
+    "rope_pct",
+    "improvement_pct",
+    "deterioration_pct",
+    "directed_certainty"
+  )
+
+  color_quo <- rlang::enquo(color_by)
+  color_expr <- rlang::quo_get_expr(color_quo)
+
+  if (missing(color_by)) {
+    color_col <- "signed_certainty"
+  } else if (is.symbol(color_expr)) {
+    color_col <- rlang::as_string(color_expr)
+  } else if (
+    is.character(color_by) &&
+      identical(color_by, allowed_colors)
+  ) {
+    color_col <- "signed_certainty"
+  } else if (
+    is.character(color_by) &&
+      length(color_by) == 1L &&
+      !is.na(color_by)
+  ) {
+    color_col <- color_by
+  } else {
+    color_col <- ""
+  }
+
+  if (!color_col %in% allowed_colors) {
+    cli::cli_abort(
+      c(
+        "x" = "Argument {.arg color_by} must be one of {.or {.val {allowed_colors}}}.",
+        "i" = "Received {.val {rlang::as_label(color_quo)}}."
+      ),
+      class = "peoplenotp_error_bad_color_by"
+    )
+  }
+
   if (
     !is.numeric(point_alpha) ||
       length(point_alpha) != 1L ||
@@ -416,14 +475,48 @@ plot.pnp_individual_certainty <- function(
     right_label <- "Favors Improvement \u2192"
   }
 
+  color_labels <- c(
+    signed_certainty = "Signed Certainty",
+    pd = "PD",
+    makowski_tier = "Evidence Tier",
+    rope_pct = "% in ROPE",
+    improvement_pct = "% Improvement",
+    deterioration_pct = "% Deterioration",
+    directed_certainty = "Directed Certainty"
+  )
+
+  color_scale <- if (color_col == "makowski_tier") {
+    rcartocolor::scale_color_carto_d(palette = "Geyser", direction = -1)
+  } else if (color_col == "signed_certainty") {
+    rcartocolor::scale_color_carto_c(
+      palette = "Geyser",
+      direction = -1,
+      limits = c(-1, 1),
+      breaks = seq(-1, 1, by = 1),
+      labels = scales::label_percent()
+    )
+  } else {
+    rcartocolor::scale_color_carto_c(
+      palette = "Geyser",
+      direction = -1,
+      limits = c(0, 1),
+      breaks = seq(0, 1, by = 0.25),
+      labels = scales::label_percent()
+    )
+  }
+
   x_min_bound <- min(c(plot_df$ci_low, -selected_mid * 1.5), na.rm = TRUE)
   x_max_bound <- max(c(plot_df$ci_high, selected_mid * 1.5), na.rm = TRUE)
-  left_x <- min(-selected_mid * 1.1, (x_min_bound - selected_mid) / 2)
-  right_x <- max(selected_mid * 1.1, (x_max_bound + selected_mid) / 2)
+  left_x <- min(-selected_mid * 1.1, (x_min_bound - selected_mid) / 3)
+  right_x <- max(selected_mid * 1.1, (x_max_bound + selected_mid) / 3)
 
   ggplot2::ggplot(
     plot_df,
-    ggplot2::aes(x = median, y = directed_certainty)
+    ggplot2::aes(
+      x = median,
+      y = directed_certainty,
+      color = .data[[color_col]]
+    )
   ) +
     geom_rope(x_range = c(-selected_mid, selected_mid)) +
     ggplot2::geom_errorbar(
@@ -433,22 +526,21 @@ plot.pnp_individual_certainty <- function(
       alpha = interval_alpha
     ) +
     ggplot2::geom_point(
-      ggplot2::aes(color = makowski_tier),
       alpha = point_alpha,
       ...
     ) +
     ggplot2::annotate(
-      "text",
+      "label",
       x = left_x,
-      y = 1.03,
+      y = 1.07,
       label = left_label,
       hjust = 0.5,
       size = 3.5
     ) +
     ggplot2::annotate(
-      "text",
+      "label",
       x = right_x,
-      y = 1.03,
+      y = 1.07,
       label = right_label,
       hjust = 0.5,
       size = 3.5
@@ -458,12 +550,12 @@ plot.pnp_individual_certainty <- function(
       limits = c(0, 1.08),
       breaks = seq(0, 1, by = 0.25)
     ) +
+    color_scale +
     ggplot2::labs(
       x = "Posterior Median (with Credible Interval)",
       y = "Directed Clinical Certainty",
-      color = "Evidence Tier"
-    ) +
-    ggplot2::theme_minimal()
+      color = unname(color_labels[[color_col]])
+    )
 }
 
 #' Ordered Makowski tier factor levels
@@ -570,6 +662,7 @@ compute_individual_mid <- function(draws, m, better_is) {
   }
 
   dir_cert <- pmax(imp_pct, det_pct)
+  signed_cert <- imp_pct - det_pct
 
   tibble::tibble(
     mid = m,
@@ -577,6 +670,7 @@ compute_individual_mid <- function(draws, m, better_is) {
     improvement_pct = imp_pct,
     deterioration_pct = det_pct,
     directed_certainty = dir_cert,
+    signed_certainty = signed_cert,
     makowski_tier = assign_makowski_tier(rope_pct)
   )
 }

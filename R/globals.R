@@ -16,6 +16,7 @@ utils::globalVariables(unique(c(
   "CI_low",
   "CI_high",
   "directed_certainty",
+  "signed_certainty",
   "makowski_tier",
   "mid",
   "mid_col",

@@ -3,23 +3,16 @@
 #' @description
 #' Summarizes population-level (fixed) effects and inter-individual
 #' random-effects heterogeneity (`sd__*` and `cor__*`) from a fitted Bayesian
-#' model (such as a `brmsfit` object). For each fixed effect, 100% of the
-#' posterior distribution is partitioned into three mutually exclusive
-#' directional regions (`improvement_pct`, `rope_pct`, and `deterioration_pct`)
-#' based on `rope` and `better_is`, alongside the Posterior Median, Credible
-#' Interval (`CI_low`, `CI_high`), and Probability of Direction (`pd`).
+#' model (such as a `brmsfit` object). For each fixed effect, computes the
+#' Posterior Median, Credible Interval (`CI_low`, `CI_high`), Probability of
+#' Direction (`pd`), and the proportion of posterior draws inside the Region of
+#' Practical Equivalence (`rope_pct`).
 #'
 #' @param model A fitted Bayesian model object supported by `{insight}` and
 #'   `{tidybayes}` (typically a `brmsfit` object), or a data frame of posterior
 #'   draws.
 #' @param rope Numeric vector of length 2 specifying the Region of Practical
 #'   Equivalence, e.g., `c(-2.5, 2.5)`.
-#' @param better_is Character string indicating the clinical polarity of the
-#'   outcome:
-#'   * `"lower"` (default): Negative change or lower values indicate
-#'     improvement (e.g., PHQ-9, Burnout).
-#'   * `"higher"`: Positive change or higher values indicate improvement
-#'     (e.g., active minutes, Morning Energy).
 #' @param parameters Optional character vector or regular expression pattern to
 #'   filter target fixed-effect parameters. Defaults to `NULL` (all fixed
 #'   effects).
@@ -29,7 +22,7 @@
 #'
 #' @return An S3 object of class `c("pnp_group_certainty", "data.frame")`
 #'   containing columns `parameter`, `effect`, `median`, `CI_low`, `CI_high`,
-#'   `pd`, `rope_pct`, `improvement_pct`, and `deterioration_pct`.
+#'   `pd`, and `rope_pct`.
 #'
 #' @examples
 #' \dontrun{
@@ -37,14 +30,13 @@
 #' data(burnout)
 #'
 #' fit <- brm(eei ~ time_weeks * group + (1 + time_weeks | id), data = burnout)
-#' group_certainty(fit, rope = c(-10, 10), better_is = "lower")
+#' group_certainty(fit, rope = c(-10, 10))
 #' }
 #'
 #' @export
 group_certainty <- function(
   model,
   rope,
-  better_is = c("lower", "higher"),
   parameters = NULL,
   ci = 0.95,
   ...
@@ -76,25 +68,6 @@ group_certainty <- function(
         "i" = "Received {.val {if (missing(rope)) NULL else rope}}."
       ),
       class = c("peoplenotp_error_bad_rope", "peoplenotp_error_bad_range")
-    )
-  }
-
-  if (identical(better_is, c("lower", "higher"))) {
-    better_is <- "lower"
-  }
-
-  if (
-    !is.character(better_is) ||
-      length(better_is) != 1L ||
-      is.na(better_is) ||
-      !better_is %in% c("lower", "higher")
-  ) {
-    cli::cli_abort(
-      c(
-        "x" = "Argument {.arg better_is} must be either {.val lower} or {.val higher}.",
-        "i" = "Received {.val {better_is}}."
-      ),
-      class = "peoplenotp_error_bad_better_is"
     )
   }
 
@@ -176,7 +149,7 @@ group_certainty <- function(
   fixed_draws_df <- extract_group_draws(
     model = model,
     vars = fixed_vars,
-    default_pattern = "^b_"
+    default_pattern = "^b_.*"
   )
 
   fixed_rows <- lapply(fixed_vars, function(var_name) {
@@ -185,7 +158,6 @@ group_certainty <- function(
       draws = draws,
       parameter = var_name,
       rope = rope,
-      better_is = better_is,
       ci = ci
     )
   })
@@ -195,7 +167,7 @@ group_certainty <- function(
     re_draws_df <- extract_group_draws(
       model = model,
       vars = re_vars,
-      default_pattern = "^(sd_|cor_)"
+      default_pattern = "^(sd_|cor_).*"
     )
     re_rows <- lapply(re_vars, function(var_name) {
       draws <- re_draws_df$.value[re_draws_df$.variable == var_name]
@@ -216,8 +188,6 @@ group_certainty <- function(
       CI_high = numeric(0),
       pd = numeric(0),
       rope_pct = numeric(0),
-      improvement_pct = numeric(0),
-      deterioration_pct = numeric(0),
       stringsAsFactors = FALSE
     )
     combined_df <- fixed_df
@@ -229,7 +199,6 @@ group_certainty <- function(
   structure(
     out,
     rope = rope,
-    better_is = better_is,
     ci = ci,
     random_effects = as.data.frame(
       random_df[, c("parameter", "median", "CI_low", "CI_high"), drop = FALSE],
@@ -254,9 +223,7 @@ print.pnp_group_certainty <- function(x, digits = 2, ...) {
     "CI_low",
     "CI_high",
     "pd",
-    "rope_pct",
-    "improvement_pct",
-    "deterioration_pct"
+    "rope_pct"
   )
   random_cols <- c("parameter", "median", "CI_low", "CI_high")
 
@@ -344,7 +311,6 @@ extract_group_draws <- function(model, vars, default_pattern) {
 #' @param draws Numeric vector of posterior draws.
 #' @param parameter Parameter name.
 #' @param rope Numeric vector of length 2.
-#' @param better_is `"lower"` or `"higher"`.
 #' @param ci Credible interval level.
 #'
 #' @return A single-row tibble.
@@ -353,7 +319,6 @@ summarize_group_fixed_draws <- function(
   draws,
   parameter,
   rope,
-  better_is,
   ci
 ) {
   qi <- tidybayes::median_qi(draws, .width = ci)
@@ -363,14 +328,6 @@ summarize_group_fixed_draws <- function(
   )
   rope_pct <- mean(draws >= rope[1] & draws <= rope[2], na.rm = TRUE)
 
-  if (better_is == "lower") {
-    imp_pct <- mean(draws < rope[1], na.rm = TRUE)
-    det_pct <- mean(draws > rope[2], na.rm = TRUE)
-  } else {
-    imp_pct <- mean(draws > rope[2], na.rm = TRUE)
-    det_pct <- mean(draws < rope[1], na.rm = TRUE)
-  }
-
   tibble::tibble(
     parameter = parameter,
     effect = "fixed",
@@ -378,9 +335,7 @@ summarize_group_fixed_draws <- function(
     CI_low = qi$ymin,
     CI_high = qi$ymax,
     pd = pd_val,
-    rope_pct = rope_pct,
-    improvement_pct = imp_pct,
-    deterioration_pct = det_pct
+    rope_pct = rope_pct
   )
 }
 
@@ -402,8 +357,6 @@ summarize_group_random_draws <- function(draws, parameter, ci) {
     CI_low = qi$ymin,
     CI_high = qi$ymax,
     pd = NA_real_,
-    rope_pct = NA_real_,
-    improvement_pct = NA_real_,
-    deterioration_pct = NA_real_
+    rope_pct = NA_real_
   )
 }
