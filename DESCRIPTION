@@ -28,6 +28,7 @@ Imports:
     purrr,
     rcartocolor,
     rlang,
+    scales,
     systemfonts,
     tibble,
     tidybayes,

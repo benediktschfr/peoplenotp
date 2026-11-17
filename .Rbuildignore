@@ -6,3 +6,4 @@
 ^\.roomodes$
 ^\.vscode$
 ^plans$
+^spec_clinical_certainty\.md$
