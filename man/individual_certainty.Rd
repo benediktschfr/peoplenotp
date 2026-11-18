@@ -20,7 +20,8 @@ individual_certainty(
 individual.}
 
 \item{id}{<\code{\link[rlang:args_data_masking]{data-masking}}> Unquoted column name
-uniquely identifying individuals (default \code{id}).}
+uniquely identifying individuals (default \code{id}), or \code{NULL} for single-case
+($N = 1$) datasets without an ID column.}
 
 \item{value}{<\code{\link[rlang:args_data_masking]{data-masking}}> Unquoted column
 name containing the individual target estimate per draw (e.g., \code{.epred},

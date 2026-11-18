@@ -46,11 +46,11 @@
 #'   data = misophonia
 #' )
 #'
-#' get_posteriorpc(fit, ndraws = 300)
+#' plot_ppc(fit, ndraws = 300)
 #' }
 #'
 #' @export
-get_posteriorpc <- function(
+plot_ppc <- function(
   model,
   ndraws = 300,
   alpha = 0.2,

@@ -340,7 +340,9 @@ test_that("plot.pnp_individual_certainty(type = 'sensitivity') builds mirrored a
 
   # Verify mirrored values in plot data: GroupA has positive prop_signed, GroupB has negative prop_signed
   df_plot_both <- p_both$data
-  expect_true(all(c("Improvement", "Deterioration") %in% df_plot_both$direction))
+  expect_true(all(
+    c("Improvement", "Deterioration") %in% df_plot_both$direction
+  ))
   grp_a_imp <- df_plot_both[
     df_plot_both$condition == "GroupA" &
       df_plot_both$direction == "Improvement" &
@@ -465,4 +467,23 @@ test_that("individual_certainty() validates arguments with informative cli error
     individual_certainty(df_valid, id = id, value = val, mid = 2, ci = 0),
     class = "peoplenotp_error_bad_ci"
   )
+})
+
+test_that("individual_certainty() supports single-case (N = 1) datasets without an id column", {
+  df_single <- tibble::tibble(
+    .draw = 1:100,
+    .epred = rep(-5, 100)
+  )
+
+  res_single <- individual_certainty(
+    data = df_single,
+    mid = c(2.0, 3.0),
+    better_is = "lower"
+  )
+
+  expect_s3_class(res_single, "pnp_individual_certainty")
+  expect_null(res_single$meta$id_col)
+  expect_identical(res_single$meta$n_individuals, 1L)
+  expect_identical(nrow(res_single$individual_summary), 2L)
+  expect_equal(res_single$individual_summary$improvement_pct, c(1, 1))
 })

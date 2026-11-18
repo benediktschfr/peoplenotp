@@ -13,7 +13,8 @@
 #' @param data A tidy data frame or tibble containing posterior draws per
 #'   individual.
 #' @param id <[`data-masking`][rlang::args_data_masking]> Unquoted column name
-#'   uniquely identifying individuals (default `id`).
+#'   uniquely identifying individuals (default `id`), or `NULL` for single-case
+#'   ($N = 1$) datasets without an ID column.
 #' @param value <[`data-masking`][rlang::args_data_masking]> Unquoted column
 #'   name containing the individual target estimate per draw (e.g., `.epred`,
 #'   `net_change`). Defaults to `.epred`.
@@ -145,7 +146,11 @@ individual_certainty <- function(
   by_quo <- rlang::enquo(.by)
   draw_quo <- rlang::enquo(draw_col)
 
-  id_name <- resolve_column_name(ungrouped_data, id_quo)
+  id_name <- resolve_id_column(
+    data = ungrouped_data,
+    id_quo = id_quo,
+    id_missing = missing(id)
+  )
   value_name <- resolve_column_name(ungrouped_data, value_quo)
 
   group_cols <- resolve_group_columns(
@@ -196,7 +201,11 @@ individual_certainty <- function(
       .by = dplyr::all_of(summary_by)
     )
 
-    merged <- dplyr::left_join(base_summary, rope_df, by = summary_by)
+    merged <- if (length(summary_by) == 0L) {
+      dplyr::bind_cols(base_summary, rope_df)
+    } else {
+      dplyr::left_join(base_summary, rope_df, by = summary_by)
+    }
     dplyr::select(
       merged,
       dplyr::all_of(summary_by),
@@ -1203,6 +1212,16 @@ assign_makowski_tier <- function(rope_pct, imp_pct, det_pct) {
 #'
 #' @return Single character string column name.
 #' @noRd
+resolve_id_column <- function(data, id_quo, id_missing = FALSE) {
+  if (rlang::quo_is_null(id_quo)) {
+    return(NULL)
+  }
+  if (id_missing && !"id" %in% names(data)) {
+    return(NULL)
+  }
+  resolve_column_name(data, id_quo)
+}
+
 resolve_column_name <- function(data, col_quo) {
   expr <- rlang::quo_get_expr(col_quo)
   col_name <- if (is.character(expr) && length(expr) == 1L) {

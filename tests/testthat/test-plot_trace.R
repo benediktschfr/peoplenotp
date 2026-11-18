@@ -1,4 +1,4 @@
-test_that("get_traceplot() creates sectioned patchwork plots for enabled parameter groups and omits random effects", {
+test_that("plot_trace() creates sectioned patchwork plots for enabled parameter groups and omits random effects", {
   set.seed(123)
   mock_data <- tibble::tibble(
     day = 1:10,
@@ -41,7 +41,7 @@ test_that("get_traceplot() creates sectioned patchwork plots for enabled paramet
     .package = "tidybayes"
   )
 
-  p <- get_traceplot(
+  p <- plot_trace(
     mock_model,
     alpha = 0.7,
     linewidth = 0.8,
@@ -63,7 +63,7 @@ test_that("get_traceplot() creates sectioned patchwork plots for enabled paramet
   expect_equal(p$facet$params$ncol, 2)
 })
 
-test_that("get_traceplot() silently skips enabled parameter groups that do not exist in the model", {
+test_that("plot_trace() silently skips enabled parameter groups that do not exist in the model", {
   mock_data <- tibble::tibble(
     day = 1:10,
     severity_score = stats::rnorm(10)
@@ -96,14 +96,14 @@ test_that("get_traceplot() silently skips enabled parameter groups that do not e
     .package = "tidybayes"
   )
 
-  p <- get_traceplot(mock_model)
+  p <- plot_trace(mock_model)
 
   expect_s3_class(p, "patchwork")
   expect_identical(queried_patterns, c("^b_", "^sigma"))
   expect_length(p$patches$plots, 1L)
 })
 
-test_that("get_traceplot() respects individual boolean flags and custom regex override", {
+test_that("plot_trace() respects individual boolean flags and custom regex override", {
   mock_data <- tibble::tibble(
     day = 1:10,
     severity_score = stats::rnorm(10)
@@ -142,7 +142,7 @@ test_that("get_traceplot() respects individual boolean flags and custom regex ov
     .package = "tidybayes"
   )
 
-  p_flags <- get_traceplot(
+  p_flags <- plot_trace(
     mock_model,
     fixed = TRUE,
     sd = FALSE,
@@ -153,7 +153,7 @@ test_that("get_traceplot() respects individual boolean flags and custom regex ov
   expect_identical(queried_patterns, "^b_")
 
   queried_patterns <- character(0)
-  p_regex <- get_traceplot(
+  p_regex <- plot_trace(
     mock_model,
     fixed = FALSE,
     sd = FALSE,
@@ -165,7 +165,7 @@ test_that("get_traceplot() respects individual boolean flags and custom regex ov
   expect_identical(queried_patterns, "^(b_day|sigma)$")
 })
 
-test_that("get_traceplot() validates arguments and throws informative cli errors", {
+test_that("plot_trace() validates arguments and throws informative cli errors", {
   mock_data <- tibble::tibble(
     day = 1:10,
     severity_score = stats::rnorm(10)
@@ -180,22 +180,22 @@ test_that("get_traceplot() validates arguments and throws informative cli errors
   )
 
   expect_error(
-    get_traceplot("not_a_model"),
+    plot_trace("not_a_model"),
     class = "peoplenotp_error_bad_model"
   )
 
   expect_error(
-    get_traceplot(valid_model, fixed = "yes"),
+    plot_trace(valid_model, fixed = "yes"),
     class = "peoplenotp_error_bad_flag"
   )
 
   expect_error(
-    get_traceplot(valid_model, sd = NA),
+    plot_trace(valid_model, sd = NA),
     class = "peoplenotp_error_bad_flag"
   )
 
   expect_error(
-    get_traceplot(
+    plot_trace(
       valid_model,
       fixed = FALSE,
       sd = FALSE,
@@ -206,37 +206,37 @@ test_that("get_traceplot() validates arguments and throws informative cli errors
   )
 
   expect_error(
-    get_traceplot(valid_model, regex = ""),
+    plot_trace(valid_model, regex = ""),
     class = "peoplenotp_error_bad_regex"
   )
 
   expect_error(
-    get_traceplot(valid_model, alpha = -0.1),
+    plot_trace(valid_model, alpha = -0.1),
     class = "peoplenotp_error_bad_alpha"
   )
 
   expect_error(
-    get_traceplot(valid_model, linewidth = 0),
+    plot_trace(valid_model, linewidth = 0),
     class = "peoplenotp_error_bad_linewidth"
   )
 
   expect_error(
-    get_traceplot(valid_model, scales = "invalid_scale"),
+    plot_trace(valid_model, scales = "invalid_scale"),
     class = "peoplenotp_error_bad_scales"
   )
 
   expect_error(
-    get_traceplot(valid_model, facet_ncol = 0),
+    plot_trace(valid_model, facet_ncol = 0),
     class = "peoplenotp_error_bad_facet_ncol"
   )
 
   expect_error(
-    get_traceplot(valid_model, patchwork_ncol = 1.5),
+    plot_trace(valid_model, patchwork_ncol = 1.5),
     class = "peoplenotp_error_bad_patchwork_ncol"
   )
 
   expect_error(
-    get_traceplot(valid_model, regex = "^nonexistent_param_"),
+    plot_trace(valid_model, regex = "^nonexistent_param_"),
     class = "peoplenotp_error_no_matching_variables"
   )
 })

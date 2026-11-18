@@ -63,17 +63,17 @@
 #' )
 #'
 #' # Default: fixed effects, SDs, sigma, and AR stacked in sections
-#' get_traceplot(fit)
+#' plot_trace(fit)
 #'
 #' # Only fixed effects and sigma, with custom styling
-#' get_traceplot(fit, sd = FALSE, ar = FALSE, alpha = 0.7, facet_ncol = 2)
+#' plot_trace(fit, sd = FALSE, ar = FALSE, alpha = 0.7, facet_ncol = 2)
 #'
 #' # Custom regex override
-#' get_traceplot(fit, regex = "^b_.*")
+#' plot_trace(fit, regex = "^b_.*")
 #' }
 #'
 #' @export
-get_traceplot <- function(
+plot_trace <- function(
   model,
   fixed = TRUE,
   sd = TRUE,

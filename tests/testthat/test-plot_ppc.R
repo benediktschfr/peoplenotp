@@ -1,4 +1,4 @@
-test_that("get_posteriorpc() builds a ggplot with density layers for standard models", {
+test_that("plot_ppc() builds a ggplot with density layers for standard models", {
   set.seed(123)
   mock_data <- tibble::tibble(
     day = 1:20,
@@ -24,7 +24,7 @@ test_that("get_posteriorpc() builds a ggplot with density layers for standard mo
     .package = "tidybayes"
   )
 
-  p <- get_posteriorpc(
+  p <- plot_ppc(
     mock_model,
     ndraws = 15,
     alpha = 0.3,
@@ -40,7 +40,7 @@ test_that("get_posteriorpc() builds a ggplot with density layers for standard mo
   expect_equal(p$layers[[2]]$aes_params$linewidth, 2.5)
 })
 
-test_that("get_posteriorpc() removes outcome and informs when ar() is present unless keep_outcome = TRUE", {
+test_that("plot_ppc() removes outcome and informs when ar() is present unless keep_outcome = TRUE", {
   set.seed(42)
   mock_data <- tibble::tibble(
     day = 1:20,
@@ -74,7 +74,7 @@ test_that("get_posteriorpc() removes outcome and informs when ar() is present un
   )
 
   expect_message(
-    p_dropped <- get_posteriorpc(mock_ar_model, ndraws = 10),
+    p_dropped <- plot_ppc(mock_ar_model, ndraws = 10),
     class = "peoplenotp_message_ar_outcome_removed"
   )
 
@@ -83,13 +83,13 @@ test_that("get_posteriorpc() removes outcome and informs when ar() is present un
   expect_true("severity_score" %in% names(p_dropped$layers[[2]]$data))
 
   expect_no_message(
-    p_kept <- get_posteriorpc(mock_ar_model, ndraws = 10, keep_outcome = TRUE)
+    p_kept <- plot_ppc(mock_ar_model, ndraws = 10, keep_outcome = TRUE)
   )
   expect_s3_class(p_kept, "ggplot")
   expect_true("severity_score" %in% names(captured_newdata))
 })
 
-test_that("get_posteriorpc() validates arguments with informative cli errors", {
+test_that("plot_ppc() validates arguments with informative cli errors", {
   mock_data <- tibble::tibble(
     day = 1:10,
     severity_score = stats::rnorm(10)
@@ -97,42 +97,42 @@ test_that("get_posteriorpc() validates arguments with informative cli errors", {
   valid_model <- stats::lm(severity_score ~ day, data = mock_data)
 
   expect_error(
-    get_posteriorpc("not_a_model"),
+    plot_ppc("not_a_model"),
     class = "peoplenotp_error_bad_model"
   )
 
   expect_error(
-    get_posteriorpc(list(data = "not_a_df")),
+    plot_ppc(list(data = "not_a_df")),
     class = "peoplenotp_error_bad_model"
   )
 
   expect_error(
-    get_posteriorpc(valid_model, ndraws = -5),
+    plot_ppc(valid_model, ndraws = -5),
     class = "peoplenotp_error_bad_ndraws"
   )
 
   expect_error(
-    get_posteriorpc(valid_model, ndraws = 2.5),
+    plot_ppc(valid_model, ndraws = 2.5),
     class = "peoplenotp_error_bad_ndraws"
   )
 
   expect_error(
-    get_posteriorpc(valid_model, alpha = 1.5),
+    plot_ppc(valid_model, alpha = 1.5),
     class = "peoplenotp_error_bad_alpha"
   )
 
   expect_error(
-    get_posteriorpc(valid_model, accent_color = ""),
+    plot_ppc(valid_model, accent_color = ""),
     class = "peoplenotp_error_bad_accent_color"
   )
 
   expect_error(
-    get_posteriorpc(valid_model, linewidth = 0),
+    plot_ppc(valid_model, linewidth = 0),
     class = "peoplenotp_error_bad_linewidth"
   )
 
   expect_error(
-    get_posteriorpc(valid_model, keep_outcome = NA),
+    plot_ppc(valid_model, keep_outcome = NA),
     class = "peoplenotp_error_bad_keep_outcome"
   )
 })
