@@ -631,6 +631,7 @@ plot.pnp_individual_certainty <- function(
       x = 0,
       y = 1.07,
       label = left_label,
+      label.r = ggplot2::unit(0, "lines"),
       hjust = 1.1,
       size = 3.5
     ) +
@@ -639,6 +640,7 @@ plot.pnp_individual_certainty <- function(
       x = 0,
       y = 1.07,
       label = right_label,
+      label.r = ggplot2::unit(0, "lines"),
       hjust = -0.1,
       size = 3.5
     ) +
