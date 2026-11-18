@@ -6,9 +6,10 @@
 \usage{
 individual_certainty(
   data,
-  id,
-  value,
+  id = id,
+  value = .epred,
   mid,
+  .by = NULL,
   better_is = c("lower", "higher"),
   draw_col = .draw,
   ci = 0.95
@@ -19,15 +20,21 @@ individual_certainty(
 individual.}
 
 \item{id}{<\code{\link[rlang:args_data_masking]{data-masking}}> Unquoted column name
-uniquely identifying individuals.}
+uniquely identifying individuals (default \code{id}).}
 
 \item{value}{<\code{\link[rlang:args_data_masking]{data-masking}}> Unquoted column
 name containing the individual target estimate per draw (e.g., \code{.epred},
-\code{net_change}).}
+\code{net_change}). Defaults to \code{.epred}.}
 
 \item{mid}{Numeric scalar (e.g., \code{2.5}) or numeric vector of positive values
 (e.g., \code{seq(1.5, 3.5, by = 0.5)}) defining the Minimal Important
 Difference threshold(s).}
+
+\item{.by}{<\code{\link[dplyr:dplyr_tidy_select]{tidy-select}}> Optional additional
+grouping column(s) such as therapy condition (e.g., \code{.by = group} or
+\code{.by = c(group, site)}). When provided (or when \code{data} is grouped via
+\code{\link[dplyr:group_by]{dplyr::group_by()}}), \verb{$individual_summary}, \verb{$matrix_data}, \code{print()}, and
+\code{plot()} are stratified across these groups. Defaults to \code{NULL}.}
 
 \item{better_is}{Character string indicating clinical polarity (\code{"lower"} or
 \code{"higher"}). Defaults to \code{"lower"}.}
@@ -41,15 +48,16 @@ name identifying the MCMC draw index (default \code{.draw}).}
 An S3 list object of class \code{"pnp_individual_certainty"} containing:
 \itemize{
 \item \verb{$individual_summary}: A \code{\link[tibble:tibble]{tibble::tibble()}} with one row per individual
-and \code{mid} value containing \verb{<id>}, \code{mid}, \code{median}, \code{ci_low}, \code{ci_high},
-\code{pd}, \code{rope_pct}, \code{improvement_pct}, \code{deterioration_pct},
-\code{directed_certainty}, \code{signed_certainty}, and \code{makowski_tier} (an ordered
-factor).
+and \code{mid} value containing \verb{<id>}, any \code{.by} grouping columns, \code{mid},
+\code{median}, \code{ci_low}, \code{ci_high}, \code{pd}, \code{rope_pct}, \code{improvement_pct},
+\code{deterioration_pct}, \code{directed_certainty}, \code{signed_certainty}, and
+\code{makowski_tier} (an ordered factor).
 \item \verb{$matrix_data}: A \code{\link[tibble:tibble]{tibble::tibble()}} representing the inverted Makowski
 Evidence Matrix crossing \code{makowski_tier} (rows) by \code{mid} thresholds
-(columns).
+(columns), stratified by \code{.by} if supplied.
 \item \verb{$meta}: A list of metadata (\code{mid}, \code{better_is}, \code{ci}, \code{id_col},
-\code{value_col}, \code{draw_col}, \code{n_individuals}, and \code{matrix_long}).
+\code{group_cols}, \code{value_col}, \code{draw_col}, \code{n_individuals}, and
+\code{matrix_long}).
 }
 }
 \description{
@@ -57,13 +65,16 @@ Summarizes individual-level posterior draws across one or more Minimal
 Important Difference (\code{mid}) thresholds. Computes posterior medians, credible
 intervals, Probability of Direction (\code{pd}), full directional ROPE
 partitioning (\code{rope_pct}, \code{improvement_pct}, \code{deterioration_pct}),
-\code{directed_certainty}, and ordered Makowski evidence tiers (\code{makowski_tier}),
-and tabulates an inverted Clinical Significance Evidence Matrix.
+\code{directed_certainty}, \code{signed_certainty}, and ordered Makowski evidence tiers
+(\code{makowski_tier}), and tabulates an inverted Clinical Significance Evidence
+Matrix (optionally stratified by \code{.by} grouping variables such as therapy
+conditions).
 }
 \examples{
 set.seed(123)
 draws_df <- tibble::tibble(
   id = rep(paste0("P", 1:10), each = 200),
+  group = rep(rep(c("Waitlist", "Intervention"), each = 5), each = 200),
   .draw = rep(1:200, times = 10),
   net_change = stats::rnorm(2000, mean = rep(seq(-5, 2, length.out = 10), each = 200), sd = 1)
 )
@@ -73,6 +84,7 @@ res <- individual_certainty(
   id = id,
   value = net_change,
   mid = c(2.0, 2.5, 3.0),
+  .by = group,
   better_is = "lower"
 )
 

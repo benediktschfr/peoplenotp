@@ -38,6 +38,7 @@ utils::globalVariables(unique(c(
   "id",
   "n_success",
   "n_total",
+  "n_group",
   "results",
   "rope",
   "threshold"

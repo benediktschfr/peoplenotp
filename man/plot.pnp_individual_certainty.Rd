@@ -9,8 +9,18 @@
   mid_select = NULL,
   color_by = c("signed_certainty", "pd", "makowski_tier", "rope_pct", "improvement_pct",
     "deterioration_pct", "directed_certainty"),
-  point_alpha = 0.85,
+  show_ci = TRUE,
+  point_size = 2,
+  point_alpha = 1,
   interval_alpha = 0.5,
+  x_lab = if (isTRUE(show_ci)) {
+     "Posterior Median (with Credible Interval)"
+ } else
+    {
+     "Posterior Median"
+ },
+  y_lab = "Directed Clinical Certainty",
+  facet = TRUE,
   ...
 )
 }
@@ -27,11 +37,30 @@ supplied as a character string or unquoted name. Must be one of
 \code{+1} for 100\% improvement), \code{"pd"}, \code{"makowski_tier"}, \code{"rope_pct"},
 \code{"improvement_pct"}, \code{"deterioration_pct"}, or \code{"directed_certainty"}.}
 
+\item{show_ci}{Logical flag (\code{TRUE} by default). If \code{TRUE}, draws horizontal
+credible interval error bars (\code{ci_low} to \code{ci_high}). If \code{FALSE}, omits the
+error bar layer entirely so the x-axis scale and annotations orient
+strictly around the posterior medians.}
+
+\item{point_size}{Numeric controlling point size (default
+\code{2}).}
+
 \item{point_alpha}{Numeric in \verb{[0, 1]} controlling point opacity (default
-\code{0.85}).}
+\code{1}).}
 
 \item{interval_alpha}{Numeric in \verb{[0, 1]} controlling horizontal error bar
 opacity (default \code{0.5}).}
+
+\item{x_lab}{String controlling x-axis label (default
+\code{"Posterior Median (with Credible Interval)"} when \code{show_ci = TRUE} or
+\code{"Posterior Median"} when \code{show_ci = FALSE}).}
+
+\item{y_lab}{String controlling y-axis label (default
+\code{"Directed Clinical Certainty"}).}
+
+\item{facet}{Logical flag (\code{TRUE} by default). When \code{TRUE} and \code{x} contains
+\code{.by} grouping columns in \code{x$meta$group_cols}, facets the Volcano Plot via
+\code{\link[ggplot2:facet_wrap]{ggplot2::facet_wrap()}}.}
 
 \item{...}{Additional arguments passed to \code{\link[ggplot2:geom_point]{ggplot2::geom_point()}}.}
 }
@@ -43,5 +72,7 @@ Visualizes individual posterior medians and credible intervals on the x-axis
 against \code{directed_certainty} (0\% to 100\%) on the y-axis, with vertical ROPE
 shading via \code{\link[=geom_rope]{geom_rope()}} and automatic directional annotations derived from
 \code{x$meta$better_is}. Both points and horizontal error bars are colored
-according to \code{color_by}.
+according to \code{color_by}. When \code{.by} grouping variables were supplied to
+\code{\link[=individual_certainty]{individual_certainty()}}, the plot is automatically faceted across those
+groups (unless \code{facet = FALSE}).
 }

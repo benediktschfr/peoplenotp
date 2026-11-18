@@ -1,16 +1,24 @@
-test_that("individual_certainty() computes summaries, Makowski tiers, and inverted evidence matrix", {
-  # Construct deterministic draws for 5 individuals across 200 draws each
-  # so each individual lands in a specific Makowski tier at MID = 2.5
-  draws_p1 <- rep(0, 200) # 100% in ROPE -> Negligible (>99% ROPE)
-  draws_p2 <- c(rep(0, 197), rep(-4, 3)) # 98.5% in ROPE -> Prob. Negligible (>97.5%)
-  draws_p3 <- c(rep(0, 100), rep(-4, 100)) # 50% in ROPE -> Undecided
-  draws_p4 <- c(rep(0, 3), rep(-4, 197)) # 1.5% in ROPE -> Prob. Significant (<2.5%)
-  draws_p5 <- rep(-5, 200) # 0% in ROPE -> Significant (<1% ROPE)
+test_that("individual_certainty() computes summaries, directed Makowski tiers, and inverted evidence matrix", {
+  # Construct deterministic draws for 6 individuals across 200 draws each
+  # so each individual lands in one of the 6 directed Makowski tiers at MID = 2.5 (better_is = "lower")
+  draws_p1 <- rep(5, 200) # 100% det -> Definite Deterioration (>99%)
+  draws_p2 <- c(rep(5, 197), rep(0, 3)) # 98.5% det -> Probable Deterioration (>97.5%)
+  draws_p3 <- c(rep(0, 100), rep(-4, 100)) # 50% ROPE, 50% imp -> Undecided
+  draws_p4 <- rep(0, 200) # 100% in ROPE -> Practically Equivalent (>97.5% ROPE)
+  draws_p5 <- c(rep(0, 3), rep(-4, 197)) # 98.5% imp -> Probable Improvement (>97.5%)
+  draws_p6 <- rep(-5, 200) # 100% imp -> Definite Improvement (>99%)
 
   df_draws <- tibble::tibble(
-    participant = rep(paste0("P", 1:5), each = 200),
-    .draw = rep(1:200, times = 5),
-    net_change = c(draws_p1, draws_p2, draws_p3, draws_p4, draws_p5)
+    participant = rep(paste0("P", 1:6), each = 200),
+    .draw = rep(1:200, times = 6),
+    net_change = c(
+      draws_p1,
+      draws_p2,
+      draws_p3,
+      draws_p4,
+      draws_p5,
+      draws_p6
+    )
   )
 
   res <- individual_certainty(
@@ -29,7 +37,7 @@ test_that("individual_certainty() computes summaries, Makowski tiers, and invert
   # Verify $individual_summary structure and calculations
   ind_sum <- res$individual_summary
   expect_s3_class(ind_sum, "tbl_df")
-  expect_identical(nrow(ind_sum), 15L) # 5 individuals * 3 MIDs
+  expect_identical(nrow(ind_sum), 18L) # 6 individuals * 3 MIDs
   expect_named(
     ind_sum,
     c(
@@ -67,35 +75,25 @@ test_that("individual_certainty() computes summaries, Makowski tiers, and invert
   )
 
   # Check ordered factor levels for makowski_tier at MID = 2.5
+  expected_levels <- c(
+    "Definite Deterioration (>99%)",
+    "Probable Deterioration (>97.5%)",
+    "Undecided",
+    "Practically Equivalent (>97.5% ROPE)",
+    "Probable Improvement (>97.5%)",
+    "Definite Improvement (>99%)"
+  )
   sub_25 <- ind_sum[ind_sum$mid == 2.5, ]
   expect_true(is.ordered(sub_25$makowski_tier))
-  expect_identical(
-    levels(sub_25$makowski_tier),
-    c(
-      "Negligible (>99% ROPE)",
-      "Prob. Negligible (>97.5%)",
-      "Undecided",
-      "Prob. Significant (<2.5%)",
-      "Significant (<1% ROPE)"
-    )
-  )
-  expect_identical(
-    as.character(sub_25$makowski_tier),
-    c(
-      "Negligible (>99% ROPE)",
-      "Prob. Negligible (>97.5%)",
-      "Undecided",
-      "Prob. Significant (<2.5%)",
-      "Significant (<1% ROPE)"
-    )
-  )
+  expect_identical(levels(sub_25$makowski_tier), expected_levels)
+  expect_identical(as.character(sub_25$makowski_tier), expected_levels)
 
-  # Verify $matrix_data structure (5 rows x MID columns)
+  # Verify $matrix_data structure (6 rows x MID columns)
   mat <- res$matrix_data
   expect_s3_class(mat, "tbl_df")
-  expect_identical(nrow(mat), 5L)
+  expect_identical(nrow(mat), 6L)
   expect_named(mat, c("makowski_tier", "MID = 2.0", "MID = 2.5", "MID = 3.0"))
-  expect_identical(mat$`MID = 2.5`, rep("1 (20.0%)", 5))
+  expect_identical(mat$`MID = 2.5`, rep("1 (16.7%)", 6))
 })
 
 test_that("print.pnp_individual_certainty() outputs the inverted Evidence Matrix via insight::export_table()", {
@@ -127,6 +125,54 @@ test_that("print.pnp_individual_certainty() outputs the inverted Evidence Matrix
 
   out_prop <- capture.output(print(res, format = "prop"))
   expect_match(paste(out_prop, collapse = "\n"), "50\\.0%")
+})
+
+test_that("individual_certainty() supports optional .by grouping and dplyr::group_by()", {
+  df_grouped <- tibble::tibble(
+    id = rep(paste0("P", 1:4), each = 100),
+    condition = rep(
+      c("Waitlist", "Waitlist", "Intervention", "Intervention"),
+      each = 100
+    ),
+    .draw = rep(1:100, times = 4),
+    .epred = c(
+      rep(0, 100), # P1 Waitlist: Negligible
+      rep(0, 100), # P2 Waitlist: Negligible
+      rep(-5, 100), # P3 Intervention: Significant
+      rep(-5, 100) # P4 Intervention: Significant
+    )
+  )
+
+  res_by <- individual_certainty(
+    df_grouped,
+    mid = c(2.0, 3.0),
+    .by = condition,
+    better_is = "lower"
+  )
+
+  expect_identical(res_by$meta$id_col, "id")
+  expect_identical(res_by$meta$group_cols, "condition")
+  expect_true("condition" %in% names(res_by$individual_summary))
+  expect_identical(nrow(res_by$matrix_data), 12L) # 6 tiers * 2 conditions
+
+  printed_by <- paste(capture.output(print(res_by)), collapse = "\n")
+  expect_match(printed_by, "condition = Waitlist")
+  expect_match(printed_by, "condition = Intervention")
+  expect_match(printed_by, "2 \\(100\\.0%\\)")
+
+  p_faceted <- plot(res_by, mid_select = 2.0)
+  expect_s3_class(p_faceted$facet, "FacetWrap")
+
+  p_unfaceted <- plot(res_by, mid_select = 2.0, facet = FALSE)
+  expect_s3_class(p_unfaceted$facet, "FacetNull")
+
+  # Also works via dplyr::group_by() and strips .row
+  res_grp <- df_grouped |>
+    dplyr::mutate(.row = 1L) |>
+    dplyr::group_by(id, condition, .row) |>
+    individual_certainty(mid = c(2.0, 3.0), better_is = "lower")
+
+  expect_identical(res_grp$individual_summary, res_by$individual_summary)
 })
 
 test_that("plot.pnp_individual_certainty() builds a volcano plot with ROPE and directional annotations", {
@@ -165,6 +211,17 @@ test_that("plot.pnp_individual_certainty() builds a volcano plot with ROPE and d
   p_imp <- plot(res_lower, mid_select = 2.5, color_by = "improvement_pct")
   expect_s3_class(p_imp, "ggplot")
   expect_identical(p_imp$labels$colour, "% Improvement")
+
+  # show_ci = FALSE omits the geom_errorbar layer and updates x-axis label
+  p_no_ci <- plot(res_lower, mid_select = 2.5, show_ci = FALSE)
+  expect_s3_class(p_no_ci, "ggplot")
+  expect_identical(length(p_no_ci$layers), length(p_lower$layers) - 1L)
+  expect_identical(p_no_ci$labels$x, "Posterior Median")
+
+  expect_error(
+    plot(res_lower, show_ci = NA),
+    class = "peoplenotp_error_bad_flag"
+  )
 
   layer_labels <- unlist(lapply(p_lower$layers, function(l) {
     l$aes_params$label
