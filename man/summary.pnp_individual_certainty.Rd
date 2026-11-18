@@ -4,7 +4,13 @@
 \alias{summary.pnp_individual_certainty}
 \title{Summary method for \code{pnp_individual_certainty} objects}
 \usage{
-\method{summary}{pnp_individual_certainty}(object, format = c("both", "count", "prop"), digits = 1, ...)
+\method{summary}{pnp_individual_certainty}(
+  object,
+  format = c("both", "count", "prop"),
+  digits = 1,
+  mid_select = NULL,
+  ...
+)
 }
 \arguments{
 \item{object}{An object of class \code{"pnp_individual_certainty"}.}
@@ -12,6 +18,9 @@
 \item{format}{Character string passed to \code{\link[=print.pnp_individual_certainty]{print.pnp_individual_certainty()}}.}
 
 \item{digits}{Integer passed to \code{\link[=print.pnp_individual_certainty]{print.pnp_individual_certainty()}}.}
+
+\item{mid_select}{Optional numeric scalar or vector passed to
+\code{\link[=print.pnp_individual_certainty]{print.pnp_individual_certainty()}}.}
 
 \item{...}{Additional arguments passed to \code{\link[=print.pnp_individual_certainty]{print.pnp_individual_certainty()}}.}
 }

@@ -39,6 +39,11 @@ utils::globalVariables(unique(c(
   "n_success",
   "n_total",
   "n_group",
+  "prop_imp",
+  "prop_det",
+  "prop_signed",
+  "direction",
+  "threshold_label",
   "results",
   "rope",
   "threshold"

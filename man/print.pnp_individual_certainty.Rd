@@ -4,7 +4,13 @@
 \alias{print.pnp_individual_certainty}
 \title{Print method for \code{pnp_individual_certainty} objects}
 \usage{
-\method{print}{pnp_individual_certainty}(x, format = c("both", "count", "prop"), digits = 1, ...)
+\method{print}{pnp_individual_certainty}(
+  x,
+  format = c("both", "count", "prop"),
+  digits = 1,
+  mid_select = NULL,
+  ...
+)
 }
 \arguments{
 \item{x}{An object of class \code{"pnp_individual_certainty"}.}
@@ -13,6 +19,13 @@
 \verb{n (\%)}), \code{"count"} (\code{n}), or \code{"prop"} (\verb{\%}).}
 
 \item{digits}{Number of decimal places for percentages (default \code{1}).}
+
+\item{mid_select}{Optional numeric scalar or vector selecting which \code{mid}
+threshold(s) from \code{x$meta$mid} to display as columns in the printed
+Evidence Matrix. When \code{NULL} (default), displays the single \code{mid} if only
+one was computed, both \code{min} and \code{max} if two were computed, or the \code{min},
+\code{middle}, and \code{max} values of the \code{mid} sequence if three or more were
+computed.}
 
 \item{...}{Additional arguments passed to \code{\link[insight:export_table]{insight::export_table()}}.}
 }

@@ -125,6 +125,35 @@ test_that("print.pnp_individual_certainty() outputs the inverted Evidence Matrix
 
   out_prop <- capture.output(print(res, format = "prop"))
   expect_match(paste(out_prop, collapse = "\n"), "50\\.0%")
+
+  # Auto min/middle/max selection when > 3 MIDs are supplied and mid_select = NULL
+  res_many <- individual_certainty(
+    data = df_draws,
+    id = id,
+    value = val,
+    mid = c(1.0, 2.0, 3.0, 4.0, 5.0),
+    better_is = "higher"
+  )
+  out_many <- paste(capture.output(print(res_many)), collapse = "\n")
+  expect_match(out_many, "MID = 1\\.0")
+  expect_match(out_many, "MID = 3\\.0")
+  expect_match(out_many, "MID = 5\\.0")
+  expect_false(grepl("MID = 2\\.0", out_many))
+  expect_false(grepl("MID = 4\\.0", out_many))
+
+  # Explicit mid_select vector in print()
+  out_explicit <- paste(
+    capture.output(print(res_many, mid_select = c(2.0, 4.0))),
+    collapse = "\n"
+  )
+  expect_match(out_explicit, "MID = 2\\.0")
+  expect_match(out_explicit, "MID = 4\\.0")
+  expect_false(grepl("MID = 1\\.0", out_explicit))
+
+  expect_error(
+    print(res_many, mid_select = 99),
+    class = "peoplenotp_error_bad_mid_select"
+  )
 })
 
 test_that("individual_certainty() supports optional .by grouping and dplyr::group_by()", {
@@ -256,6 +285,121 @@ test_that("plot.pnp_individual_certainty() builds a volcano plot with ROPE and d
   expect_error(
     plot(res_lower, point_alpha = 2),
     class = "peoplenotp_error_bad_alpha"
+  )
+
+  expect_error(
+    plot(res_lower, type = "invalid_type"),
+    class = "peoplenotp_error_bad_type"
+  )
+})
+
+test_that("plot.pnp_individual_certainty(type = 'sensitivity') builds mirrored and single-sided sensitivity plots with grouping", {
+  # P1: 100% improvement at MID <= 4 (change = -5, better_is = "lower")
+  # P2: 80% improvement at MID = 2, 0% at MID = 4
+  # P3: 100% deterioration at MID <= 4 (change = +5, better_is = "lower")
+  # P4: 0% improvement/deterioration (change = 0)
+  df_draws <- tibble::tibble(
+    id = rep(paste0("P", 1:4), each = 100),
+    condition = rep(c("GroupA", "GroupA", "GroupB", "GroupB"), each = 100),
+    .draw = rep(1:100, times = 4),
+    change = c(
+      rep(-5, 100),
+      c(rep(-3, 80), rep(0, 20)),
+      rep(5, 100),
+      rep(0, 100)
+    )
+  )
+
+  res <- individual_certainty(
+    df_draws,
+    id = id,
+    value = change,
+    mid = c(2.0, 4.0),
+    .by = condition,
+    better_is = "lower"
+  )
+
+  p_both <- plot(
+    res,
+    type = "sensitivity",
+    thresholds = c(0.5, 0.9)
+  )
+  expect_s3_class(p_both, "ggplot")
+  expect_s3_class(p_both$facet, "FacetWrap")
+  expect_identical(p_both$labels$x, "Minimal Important Difference (MID)")
+  expect_identical(p_both$labels$y, "Proportion Meeting Certainty")
+  expect_identical(p_both$labels$colour, "Certainty Threshold")
+
+  # Check directional annotations in butterfly plot
+  sens_labels <- unlist(lapply(p_both$layers, function(l) {
+    l$aes_params$label
+  }))
+  expect_in("\u2191 Improvement", sens_labels)
+  expect_in("\u2193 Deterioration", sens_labels)
+
+  # Verify mirrored values in plot data: GroupA has positive prop_signed, GroupB has negative prop_signed
+  df_plot_both <- p_both$data
+  expect_true(all(c("Improvement", "Deterioration") %in% df_plot_both$direction))
+  grp_a_imp <- df_plot_both[
+    df_plot_both$condition == "GroupA" &
+      df_plot_both$direction == "Improvement" &
+      df_plot_both$mid == 2.0 &
+      df_plot_both$threshold == 0.5,
+  ]
+  expect_equal(grp_a_imp$prop_signed, 1.0) # Both P1 (100%) and P2 (80%) >= 0.5
+
+  grp_b_det <- df_plot_both[
+    df_plot_both$condition == "GroupB" &
+      df_plot_both$direction == "Deterioration" &
+      df_plot_both$mid == 2.0 &
+      df_plot_both$threshold == 0.9,
+  ]
+  expect_equal(grp_b_det$prop_signed, -0.5) # P3 (100%) >= 0.9 out of 2 in GroupB -> -0.5
+
+  # Single-sided outcome = "improvement" and outcome = "deterioration"
+  p_imp <- plot(
+    res,
+    type = "sensitivity",
+    outcome = "improvement",
+    color_palette = "viridis",
+    facet = FALSE
+  )
+  expect_s3_class(p_imp, "ggplot")
+  expect_s3_class(p_imp$facet, "FacetNull")
+  expect_true(all(p_imp$data$prop_certain >= 0))
+  expect_identical(unique(p_imp$data$direction), "Improvement")
+
+  p_det <- plot(
+    res,
+    type = "sensitivity",
+    outcome = "deterioration",
+    color_palette = "oasis",
+    mid_select = 2.0
+  )
+  expect_s3_class(p_det, "ggplot")
+  expect_identical(unique(p_det$data$mid), 2.0)
+  expect_identical(unique(p_det$data$direction), "Deterioration")
+
+  # Validation errors for sensitivity plot arguments
+  expect_error(
+    plot(res, type = "sensitivity", outcome = "invalid"),
+    class = "peoplenotp_error_bad_outcome"
+  )
+  expect_error(
+    plot(res, type = "sensitivity", thresholds = c(0, 0.5)),
+    class = "peoplenotp_error_bad_thresholds"
+  )
+  expect_error(
+    plot(res, type = "sensitivity", thresholds = c(0.5, 1.2)),
+    class = "peoplenotp_error_bad_thresholds"
+  )
+  expect_error(
+    plot(res, type = "sensitivity", color_palette = "nonexistent"),
+    class = "peoplenotp_error_bad_color_palette"
+  )
+  expect_error(
+    plot(res, type = "sensitivity", mid_select = 99),
+    class = "peoplenotp_error_bad_mid_select"
   )
 })
 

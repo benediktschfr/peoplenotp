@@ -2,24 +2,23 @@
 % Please edit documentation in R/individual_certainty.R
 \name{plot.pnp_individual_certainty}
 \alias{plot.pnp_individual_certainty}
-\title{Plot a Bayesian Clinical Volcano Plot for \code{pnp_individual_certainty} objects}
+\title{Plot a Bayesian Clinical Volcano or Sensitivity Plot for \code{pnp_individual_certainty} objects}
 \usage{
 \method{plot}{pnp_individual_certainty}(
   x,
+  type = c("volcano", "sensitivity"),
   mid_select = NULL,
   color_by = c("signed_certainty", "pd", "makowski_tier", "rope_pct", "improvement_pct",
     "deterioration_pct", "directed_certainty"),
+  thresholds = c(0.5, 0.7, 0.8, 0.9, 0.95),
+  outcome = c("both", "improvement", "deterioration"),
+  color_palette = "Temps",
   show_ci = TRUE,
   point_size = 2,
   point_alpha = 1,
   interval_alpha = 0.5,
-  x_lab = if (isTRUE(show_ci)) {
-     "Posterior Median (with Credible Interval)"
- } else
-    {
-     "Posterior Median"
- },
-  y_lab = "Directed Clinical Certainty",
+  x_lab = NULL,
+  y_lab = NULL,
   facet = TRUE,
   ...
 )
@@ -27,52 +26,85 @@
 \arguments{
 \item{x}{An object of class \code{"pnp_individual_certainty"}.}
 
-\item{mid_select}{Optional single numeric value selecting which \code{mid}
-threshold from \code{x$meta$mid} to plot. Defaults to \code{NULL} (uses the first
-\code{mid} value in \code{x$meta$mid}).}
+\item{type}{Character string selecting the visualization type: \code{"volcano"}
+(default) or \code{"sensitivity"}.}
 
-\item{color_by}{Variable used to color both points and error bars. Can be
-supplied as a character string or unquoted name. Must be one of
-\code{"signed_certainty"} (default, ranging from \code{-1} for 100\% deterioration to
-\code{+1} for 100\% improvement), \code{"pd"}, \code{"makowski_tier"}, \code{"rope_pct"},
-\code{"improvement_pct"}, \code{"deterioration_pct"}, or \code{"directed_certainty"}.}
+\item{mid_select}{Optional numeric value(s) selecting which \code{mid}
+threshold(s) from \code{x$meta$mid} to plot. For \code{type = "volcano"}, must be a
+single value (defaults to the first value in \code{x$meta$mid}). For
+\code{type = "sensitivity"}, can be a numeric vector to subset the plotted \code{mid}
+sequence (defaults to \code{NULL}, using all \code{x$meta$mid} values).}
 
-\item{show_ci}{Logical flag (\code{TRUE} by default). If \code{TRUE}, draws horizontal
-credible interval error bars (\code{ci_low} to \code{ci_high}). If \code{FALSE}, omits the
-error bar layer entirely so the x-axis scale and annotations orient
-strictly around the posterior medians.}
+\item{color_by}{Variable used to color both points and error bars when
+\code{type = "volcano"}. Can be supplied as a character string or unquoted name.
+Must be one of \code{"signed_certainty"} (default, ranging from \code{-1} for 100\%
+deterioration to \code{+1} for 100\% improvement), \code{"pd"}, \code{"makowski_tier"},
+\code{"rope_pct"}, \code{"improvement_pct"}, \code{"deterioration_pct"}, or
+\code{"directed_certainty"}.}
 
-\item{point_size}{Numeric controlling point size (default
-\code{2}).}
+\item{thresholds}{Numeric vector of probability thresholds in \verb{(0, 1]} used
+when \code{type = "sensitivity"}. Defaults to \code{c(0.5, 0.7, 0.8, 0.9, 0.95)}.}
+
+\item{outcome}{Character string specifying which clinical direction(s) to
+display when \code{type = "sensitivity"}: \code{"both"} (default, mirrored butterfly
+plot with improvement above 0 and deterioration below 0), \code{"improvement"},
+or \code{"deterioration"}.}
+
+\item{color_palette}{Character string specifying the discrete color palette
+for \code{thresholds} when \code{type = "sensitivity"}. Defaults to \code{"Temps"} (via
+\code{{rcartocolor}}). Also supports any \code{{rcartocolor}} palette, any
+\code{{viridisLite}} option (\code{"viridis"}, \code{"magma"}, \code{"inferno"}, \code{"plasma"},
+\code{"cividis"}, \code{"rocket"}, \code{"mako"}, \code{"turbo"}), or any palette name in
+\link{custom_palettes}.}
+
+\item{show_ci}{Logical flag (\code{TRUE} by default). For \code{type = "volcano"},
+draws horizontal credible interval error bars (\code{ci_low} to \code{ci_high}) when
+\code{TRUE}.}
+
+\item{point_size}{Numeric controlling point size (default \code{2}).}
 
 \item{point_alpha}{Numeric in \verb{[0, 1]} controlling point opacity (default
 \code{1}).}
 
 \item{interval_alpha}{Numeric in \verb{[0, 1]} controlling horizontal error bar
-opacity (default \code{0.5}).}
+opacity in the volcano plot (default \code{0.5}).}
 
-\item{x_lab}{String controlling x-axis label (default
-\code{"Posterior Median (with Credible Interval)"} when \code{show_ci = TRUE} or
-\code{"Posterior Median"} when \code{show_ci = FALSE}).}
+\item{x_lab}{Optional string controlling the x-axis label. When \code{NULL}
+(default), uses \code{"Posterior Median (with Credible Interval)"} (or
+\code{"Posterior Median"} when \code{show_ci = FALSE}) for \code{type = "volcano"}, and
+\code{"Minimal Important Difference (MID)"} for \code{type = "sensitivity"}.}
 
-\item{y_lab}{String controlling y-axis label (default
-\code{"Directed Clinical Certainty"}).}
+\item{y_lab}{Optional string controlling the y-axis label. When \code{NULL}
+(default), uses \code{"Directed Clinical Certainty"} for \code{type = "volcano"}, and
+\code{"Proportion Meeting Certainty"} for \code{type = "sensitivity"}.}
 
 \item{facet}{Logical flag (\code{TRUE} by default). When \code{TRUE} and \code{x} contains
-\code{.by} grouping columns in \code{x$meta$group_cols}, facets the Volcano Plot via
+\code{.by} grouping columns in \code{x$meta$group_cols}, facets the plot via
 \code{\link[ggplot2:facet_wrap]{ggplot2::facet_wrap()}}.}
 
-\item{...}{Additional arguments passed to \code{\link[ggplot2:geom_point]{ggplot2::geom_point()}}.}
+\item{...}{Additional arguments passed to \code{\link[ggplot2:geom_point]{ggplot2::geom_point()}} (and
+\code{\link[ggplot2:geom_line]{ggplot2::geom_line()}} when \code{type = "sensitivity"}).}
 }
 \value{
 A \code{\link[ggplot2:ggplot]{ggplot2::ggplot()}} object.
 }
 \description{
-Visualizes individual posterior medians and credible intervals on the x-axis
-against \code{directed_certainty} (0\% to 100\%) on the y-axis, with vertical ROPE
-shading via \code{\link[=geom_rope]{geom_rope()}} and automatic directional annotations derived from
-\code{x$meta$better_is}. Both points and horizontal error bars are colored
-according to \code{color_by}. When \code{.by} grouping variables were supplied to
-\code{\link[=individual_certainty]{individual_certainty()}}, the plot is automatically faceted across those
-groups (unless \code{facet = FALSE}).
+Visualizes individual-level Bayesian clinical certainty as either:
+\itemize{
+\item \strong{\code{type = "volcano"} (default):} Individual posterior medians and credible
+intervals on the x-axis against \code{directed_certainty} (0\% to 100\%) on the
+y-axis, with vertical ROPE shading via \code{\link[=geom_rope]{geom_rope()}} and automatic
+directional annotations derived from \code{x$meta$better_is}.
+\item \strong{\code{type = "sensitivity"}:} A clinical certainty sensitivity curve across
+\code{mid} values on the x-axis and discrete probability \code{thresholds} as colored
+lines. By default (\code{outcome = "both"}), renders a mirrored butterfly plot
+showing the proportion of individuals achieving certainty for improvement
+upward (\verb{0\%} to \verb{+100\%}) and for deterioration downward (\verb{0\%} to \verb{100\%}),
+or single-sided curves when \code{outcome = "improvement"} or
+\code{"deterioration"}.
+}
+
+When \code{.by} grouping variables were supplied to \code{\link[=individual_certainty]{individual_certainty()}}, both
+plot types are automatically faceted across those groups (unless
+\code{facet = FALSE}).
 }
