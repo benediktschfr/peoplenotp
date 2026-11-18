@@ -414,13 +414,14 @@ summary.pnp_individual_certainty <- function(
 #'   intervals on the x-axis against `directed_certainty` (0% to 100%) on the
 #'   y-axis, with vertical ROPE shading via [geom_rope()] and automatic
 #'   directional annotations derived from `x$meta$better_is`.
-#' * **`type = "sensitivity"`:** A clinical certainty sensitivity curve across
-#'   `mid` values on the x-axis and discrete probability `thresholds` as colored
-#'   lines. By default (`outcome = "both"`), renders a mirrored butterfly plot
-#'   showing the proportion of individuals achieving certainty for improvement
-#'   upward (`0%` to `+100%`) and for deterioration downward (`0%` to `100%`),
-#'   or single-sided curves when `outcome = "improvement"` or
-#'   `"deterioration"`.
+#' * **`type = "sensitivity"`:** A 2D clinical certainty sensitivity heatmap
+#'   (`geom_tile()`) across `mid` values on the x-axis and a fine sequence of
+#'   probability `thresholds` on the y-axis, where tile fill represents the
+#'   proportion of individuals meeting clinical certainty. By default
+#'   (`outcome = "both"`), renders a mirrored butterfly heatmap with
+#'   improvement thresholds extending upward (`50%` to `100%`) and deterioration
+#'   thresholds extending downward (`50%` to `100%`), or a single-sided heatmap
+#'   when `outcome = "improvement"` or `"deterioration"`.
 #'
 #' When `.by` grouping variables were supplied to [individual_certainty()], both
 #' plot types are automatically faceted across those groups (unless
@@ -440,24 +441,25 @@ summary.pnp_individual_certainty <- function(
 #'   deterioration to `+1` for 100% improvement), `"pd"`, `"makowski_tier"`,
 #'   `"rope_pct"`, `"improvement_pct"`, `"deterioration_pct"`, or
 #'   `"directed_certainty"`.
-#' @param thresholds Numeric vector of probability thresholds in `(0, 1]` used
-#'   when `type = "sensitivity"`. Defaults to `c(0.5, 0.7, 0.8, 0.9, 0.95)`.
+#' @param thresholds Numeric vector of probability thresholds in `(0, 1]` mapped
+#'   to the y-axis when `type = "sensitivity"`. Defaults to
+#'   `seq(0.50, 0.99, by = 0.01)`.
 #' @param outcome Character string specifying which clinical direction(s) to
 #'   display when `type = "sensitivity"`: `"both"` (default, mirrored butterfly
-#'   plot with improvement above 0 and deterioration below 0), `"improvement"`,
-#'   or `"deterioration"`.
-#' @param color_palette Character string specifying the discrete color palette
-#'   for `thresholds` when `type = "sensitivity"`. Defaults to `"Temps"` (via
-#'   `{rcartocolor}`). Also supports any `{rcartocolor}` palette, any
-#'   `{viridisLite}` option (`"viridis"`, `"magma"`, `"inferno"`, `"plasma"`,
-#'   `"cividis"`, `"rocket"`, `"mako"`, `"turbo"`), or any palette name in
-#'   [custom_palettes].
+#'   heatmap with improvement above the center line and deterioration below),
+#'   `"improvement"`, or `"deterioration"`.
+#' @param color_palette Character string specifying the fill palette when
+#'   `type = "sensitivity"`. Defaults to `"Temps"` (via `{rcartocolor}`). Also
+#'   supports any `{rcartocolor}` palette, any `{viridisLite}` option
+#'   (`"viridis"`, `"magma"`, `"inferno"`, `"plasma"`, `"cividis"`, `"rocket"`,
+#'   `"mako"`, `"turbo"`), or any palette name in [custom_palettes].
 #' @param show_ci Logical flag (`TRUE` by default). For `type = "volcano"`,
 #'   draws horizontal credible interval error bars (`ci_low` to `ci_high`) when
 #'   `TRUE`.
-#' @param point_size Numeric controlling point size (default `2`).
-#' @param point_alpha Numeric in `[0, 1]` controlling point opacity (default
-#'   `1`).
+#' @param point_size Numeric controlling point size in the volcano plot (default
+#'   `2`).
+#' @param point_alpha Numeric in `[0, 1]` controlling point/tile opacity
+#'   (default `1`).
 #' @param interval_alpha Numeric in `[0, 1]` controlling horizontal error bar
 #'   opacity in the volcano plot (default `0.5`).
 #' @param x_lab Optional string controlling the x-axis label. When `NULL`
@@ -466,12 +468,12 @@ summary.pnp_individual_certainty <- function(
 #'   `"Minimal Important Difference (MID)"` for `type = "sensitivity"`.
 #' @param y_lab Optional string controlling the y-axis label. When `NULL`
 #'   (default), uses `"Directed Clinical Certainty"` for `type = "volcano"`, and
-#'   `"Proportion Meeting Certainty"` for `type = "sensitivity"`.
+#'   `"Certainty Threshold"` for `type = "sensitivity"`.
 #' @param facet Logical flag (`TRUE` by default). When `TRUE` and `x` contains
 #'   `.by` grouping columns in `x$meta$group_cols`, facets the plot via
 #'   [ggplot2::facet_wrap()].
-#' @param ... Additional arguments passed to [ggplot2::geom_point()] (and
-#'   [ggplot2::geom_line()] when `type = "sensitivity"`).
+#' @param ... Additional arguments passed to [ggplot2::geom_point()] (for
+#'   `type = "volcano"`) or [ggplot2::geom_tile()] (for `type = "sensitivity"`).
 #'
 #' @return A [ggplot2::ggplot()] object.
 #' @export
@@ -488,7 +490,7 @@ plot.pnp_individual_certainty <- function(
     "deterioration_pct",
     "directed_certainty"
   ),
-  thresholds = c(0.5, 0.7, 0.8, 0.9, 0.95),
+  thresholds = seq(0.50, 0.99, by = 0.01),
   outcome = c("both", "improvement", "deterioration"),
   color_palette = "Temps",
   show_ci = TRUE,
@@ -801,26 +803,26 @@ resolve_print_mids <- function(available_mids, mid_select = NULL) {
   unique(mid_select)
 }
 
-#' Build and plot the clinical certainty sensitivity curve for `pnp_individual_certainty`
+#' Build and plot the clinical certainty sensitivity heatmap for `pnp_individual_certainty`
 #'
 #' @param x A `pnp_individual_certainty` object.
 #' @param mid_select Optional subset of `x$meta$mid`.
 #' @param thresholds Numeric vector of probability thresholds in `(0, 1]`.
 #' @param outcome `"both"`, `"improvement"`, or `"deterioration"`.
-#' @param color_palette Discrete palette name.
-#' @param point_size Point size.
-#' @param point_alpha Point opacity.
+#' @param color_palette Fill palette name.
+#' @param point_size Unused for tile plot (kept for internal signature consistency).
+#' @param point_alpha Tile opacity in `[0, 1]`.
 #' @param x_lab X-axis label.
 #' @param y_lab Y-axis label.
 #' @param facet Logical flag for `.by` group faceting.
-#' @param ... Additional arguments passed to `geom_line()` and `geom_point()`.
+#' @param ... Additional arguments passed to `geom_tile()`.
 #'
 #' @return A `ggplot` object.
 #' @noRd
 plot_individual_sensitivity <- function(
   x,
   mid_select = NULL,
-  thresholds = c(0.5, 0.7, 0.8, 0.9, 0.95),
+  thresholds = seq(0.50, 0.99, by = 0.01),
   outcome = c("both", "improvement", "deterioration"),
   color_palette = "Temps",
   point_size = 2,
@@ -886,50 +888,61 @@ plot_individual_sensitivity <- function(
     selected_mids <- unique(mid_select)
   }
 
-  color_scale <- resolve_sensitivity_color_scale(color_palette)
+  fill_scale <- resolve_sensitivity_fill_scale(
+    color_palette = color_palette,
+    outcome = outcome
+  )
 
   if (is.null(x_lab)) {
     x_lab <- "Minimal Important Difference (MID)"
   }
   if (is.null(y_lab)) {
-    y_lab <- "Proportion Meeting Certainty"
+    y_lab <- "Certainty Threshold"
   }
 
   group_cols <- x$meta$group_cols %||% character(0)
+  thresh_vals <- sort(unique(thresholds))
+  t_base <- min(thresh_vals)
+  t_step <- if (length(thresh_vals) > 1L) min(diff(thresh_vals)) else 0.01
+  t_span <- (max(thresh_vals) - t_base) + t_step
+
   grid_df <- build_sensitivity_grid(
     individual_summary = x$individual_summary,
     selected_mids = selected_mids,
-    thresholds = thresholds,
+    thresholds = thresh_vals,
     group_cols = group_cols,
-    outcome = outcome
+    outcome = outcome,
+    t_base = t_base,
+    t_step = t_step
   )
 
   if (outcome == "both") {
     x_annot <- mean(range(selected_mids))
+    y_annot <- t_span * 1.12
+    y_lim <- t_span * 1.24
+    y_breaks <- seq(-t_span, t_span, length.out = 5)
 
     p <- ggplot2::ggplot(
       grid_df,
       ggplot2::aes(
         x = mid,
-        y = prop_signed,
-        color = threshold_label,
-        group = interaction(threshold_label, direction)
+        y = y_tile,
+        fill = prop_signed
       )
     ) +
+      ggplot2::geom_tile(
+        ggplot2::aes(height = tile_height),
+        alpha = point_alpha,
+        ...
+      ) +
       ggplot2::geom_hline(
         yintercept = 0,
         linetype = "dotted"
       ) +
-      ggplot2::geom_line(...) +
-      ggplot2::geom_point(
-        size = point_size,
-        alpha = point_alpha,
-        ...
-      ) +
       ggplot2::annotate(
         "label",
         x = x_annot,
-        y = 1.07,
+        y = y_annot,
         label = "\u2191 Improvement",
         label.r = ggplot2::unit(0, "lines"),
         size = 3.5
@@ -937,49 +950,46 @@ plot_individual_sensitivity <- function(
       ggplot2::annotate(
         "label",
         x = x_annot,
-        y = -1.07,
+        y = -y_annot,
         label = "\u2193 Deterioration",
         label.r = ggplot2::unit(0, "lines"),
         size = 3.5
       ) +
       ggplot2::scale_y_continuous(
-        labels = function(b) scales::label_percent()(abs(b)),
-        limits = c(-1.14, 1.14),
-        breaks = seq(-1, 1, by = 0.25)
+        labels = function(b) scales::label_percent()(t_base + abs(b)),
+        limits = c(-y_lim, y_lim),
+        breaks = y_breaks
       ) +
       ggplot2::coord_cartesian(clip = "off") +
-      color_scale +
+      fill_scale +
       ggplot2::labs(
         x = x_lab,
         y = y_lab,
-        color = "Certainty Threshold"
+        fill = "Proportion Certain"
       )
   } else {
     p <- ggplot2::ggplot(
       grid_df,
       ggplot2::aes(
         x = mid,
-        y = prop_certain,
-        color = threshold_label,
-        group = threshold_label
+        y = y_tile,
+        fill = prop_certain
       )
     ) +
-      ggplot2::geom_line(...) +
-      ggplot2::geom_point(
-        size = point_size,
+      ggplot2::geom_tile(
+        ggplot2::aes(height = tile_height),
         alpha = point_alpha,
         ...
       ) +
       ggplot2::scale_y_continuous(
         labels = scales::label_percent(),
-        limits = c(0, 1),
-        breaks = seq(0, 1, by = 0.25)
+        limits = c(t_base - t_step / 2, max(thresh_vals) + t_step / 2)
       ) +
-      color_scale +
+      fill_scale +
       ggplot2::labs(
         x = x_lab,
         y = y_lab,
-        color = "Certainty Threshold"
+        fill = "Proportion Certain"
       )
   }
 
@@ -994,23 +1004,25 @@ plot_individual_sensitivity <- function(
 #'
 #' @param individual_summary Tibble from `x$individual_summary`.
 #' @param selected_mids Numeric vector of MID values to include.
-#' @param thresholds Numeric vector of probability thresholds.
+#' @param thresholds Sorted numeric vector of probability thresholds.
 #' @param group_cols Character vector of grouping column names.
 #' @param outcome `"both"`, `"improvement"`, or `"deterioration"`.
+#' @param t_base Minimum threshold value used as mirror baseline.
+#' @param t_step Step height of each threshold tile.
 #'
-#' @return A summarized tibble for plotting.
+#' @return A summarized tibble for plotting with `geom_tile()`.
 #' @noRd
 build_sensitivity_grid <- function(
   individual_summary,
   selected_mids,
   thresholds,
   group_cols = character(0),
-  outcome = "both"
+  outcome = "both",
+  t_base = min(thresholds),
+  t_step = 0.01
 ) {
   sub_df <- dplyr::filter(individual_summary, mid %in% selected_mids)
   thresh_vals <- sort(unique(thresholds))
-  thresh_labels <- scales::label_percent()(thresh_vals)
-  label_map <- stats::setNames(thresh_labels, as.character(thresh_vals))
 
   summary_by <- c(group_cols, "mid")
 
@@ -1023,11 +1035,7 @@ build_sensitivity_grid <- function(
       .by = dplyr::all_of(summary_by)
     )
     agg$threshold <- t_val
-    agg$threshold_label <- factor(
-      unname(label_map[as.character(t_val)]),
-      levels = thresh_labels,
-      ordered = TRUE
-    )
+    agg$tile_height <- t_step
     agg
   })
 
@@ -1038,6 +1046,7 @@ build_sensitivity_grid <- function(
       dplyr::mutate(
         combined,
         direction = "Improvement",
+        y_tile = threshold,
         prop_certain = prop_imp,
         prop_signed = prop_imp
       )
@@ -1049,6 +1058,7 @@ build_sensitivity_grid <- function(
       dplyr::mutate(
         combined,
         direction = "Deterioration",
+        y_tile = threshold,
         prop_certain = prop_det,
         prop_signed = prop_det
       )
@@ -1058,12 +1068,14 @@ build_sensitivity_grid <- function(
   imp_rows <- dplyr::mutate(
     combined,
     direction = "Improvement",
+    y_tile = (threshold - t_base) + t_step / 2,
     prop_certain = prop_imp,
     prop_signed = prop_imp
   )
   det_rows <- dplyr::mutate(
     combined,
     direction = "Deterioration",
+    y_tile = -(threshold - t_base) - t_step / 2,
     prop_certain = prop_det,
     prop_signed = -prop_det
   )
@@ -1071,13 +1083,14 @@ build_sensitivity_grid <- function(
   dplyr::bind_rows(imp_rows, det_rows)
 }
 
-#' Resolve discrete color scale for sensitivity threshold curves
+#' Resolve continuous fill scale for sensitivity heatmap tiles
 #'
 #' @param color_palette Palette name.
+#' @param outcome `"both"`, `"improvement"`, or `"deterioration"`.
 #'
-#' @return A `ggplot2` discrete color scale.
+#' @return A `ggplot2` continuous fill scale.
 #' @noRd
-resolve_sensitivity_color_scale <- function(color_palette) {
+resolve_sensitivity_fill_scale <- function(color_palette, outcome = "both") {
   carto_options <- rcartocolor::cartocolors$Name
   viridis_options <- c(
     "viridis",
@@ -1114,13 +1127,35 @@ resolve_sensitivity_color_scale <- function(color_palette) {
     )
   }
 
-  if (color_palette %in% carto_options) {
-    rcartocolor::scale_color_carto_d(palette = color_palette, direction = -1)
-  } else if (color_palette %in% viridis_options) {
-    ggplot2::scale_color_viridis_d(option = color_palette)
+  scale_limits <- if (outcome == "both") c(-1, 1) else c(0, 1)
+  scale_breaks <- if (outcome == "both") {
+    seq(-1, 1, by = 1)
   } else {
-    ggplot2::scale_color_manual(
-      values = unname(peoplenotp::custom_palettes[[color_palette]])
+    seq(0, 1, by = 0.25)
+  }
+  scale_labels <- function(b) scales::label_percent()(abs(b))
+
+  if (color_palette %in% carto_options) {
+    rcartocolor::scale_fill_carto_c(
+      palette = color_palette,
+      direction = -1,
+      limits = scale_limits,
+      breaks = scale_breaks,
+      labels = scale_labels
+    )
+  } else if (color_palette %in% viridis_options) {
+    ggplot2::scale_fill_viridis_c(
+      option = color_palette,
+      limits = scale_limits,
+      breaks = scale_breaks,
+      labels = scale_labels
+    )
+  } else {
+    ggplot2::scale_fill_gradientn(
+      colours = unname(peoplenotp::custom_palettes[[color_palette]]),
+      limits = scale_limits,
+      breaks = scale_breaks,
+      labels = scale_labels
     )
   }
 }

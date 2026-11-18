@@ -326,9 +326,10 @@ test_that("plot.pnp_individual_certainty(type = 'sensitivity') builds mirrored a
   )
   expect_s3_class(p_both, "ggplot")
   expect_s3_class(p_both$facet, "FacetWrap")
+  expect_s3_class(p_both$layers[[1]]$geom, "GeomTile")
   expect_identical(p_both$labels$x, "Minimal Important Difference (MID)")
-  expect_identical(p_both$labels$y, "Proportion Meeting Certainty")
-  expect_identical(p_both$labels$colour, "Certainty Threshold")
+  expect_identical(p_both$labels$y, "Certainty Threshold")
+  expect_identical(p_both$labels$fill, "Proportion Certain")
 
   # Check directional annotations in butterfly plot
   sens_labels <- unlist(lapply(p_both$layers, function(l) {
@@ -347,6 +348,7 @@ test_that("plot.pnp_individual_certainty(type = 'sensitivity') builds mirrored a
       df_plot_both$threshold == 0.5,
   ]
   expect_equal(grp_a_imp$prop_signed, 1.0) # Both P1 (100%) and P2 (80%) >= 0.5
+  expect_true(grp_a_imp$y_tile > 0)
 
   grp_b_det <- df_plot_both[
     df_plot_both$condition == "GroupB" &
@@ -355,6 +357,7 @@ test_that("plot.pnp_individual_certainty(type = 'sensitivity') builds mirrored a
       df_plot_both$threshold == 0.9,
   ]
   expect_equal(grp_b_det$prop_signed, -0.5) # P3 (100%) >= 0.9 out of 2 in GroupB -> -0.5
+  expect_true(grp_b_det$y_tile < 0)
 
   # Single-sided outcome = "improvement" and outcome = "deterioration"
   p_imp <- plot(

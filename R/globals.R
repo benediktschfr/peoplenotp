@@ -43,7 +43,8 @@ utils::globalVariables(unique(c(
   "prop_det",
   "prop_signed",
   "direction",
-  "threshold_label",
+  "y_tile",
+  "tile_height",
   "results",
   "rope",
   "threshold"
