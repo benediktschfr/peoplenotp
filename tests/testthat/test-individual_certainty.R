@@ -43,6 +43,8 @@ test_that("individual_certainty() computes summaries, directed Makowski tiers, a
     c(
       "participant",
       "mid",
+      "rope_low",
+      "rope_high",
       "median",
       "ci_low",
       "ci_high",
@@ -486,4 +488,62 @@ test_that("individual_certainty() supports single-case (N = 1) datasets without 
   expect_identical(res_single$meta$n_individuals, 1L)
   expect_identical(nrow(res_single$individual_summary), 2L)
   expect_equal(res_single$individual_summary$improvement_pct, c(1, 1))
+})
+
+test_that("individual_certainty() supports asymmetric MID ranges (single range and list of ranges)", {
+  # Asymmetric MID range: c(-10, 5) with better_is = "lower"
+  # P1: draws at -12 (< -10) -> 100% improvement
+  # P2: draws at -7 (in [-10, 5]) -> 100% ROPE (even though |-7| > 5!)
+  # P3: draws at +7 (> 5) -> 100% deterioration (even though |+7| < 10!)
+  df_asym <- tibble::tibble(
+    id = rep(c("P1", "P2", "P3"), each = 100),
+    .draw = rep(1:100, times = 3),
+    change = c(rep(-12, 100), rep(-7, 100), rep(7, 100))
+  )
+
+  res_asym <- individual_certainty(
+    data = df_asym,
+    id = id,
+    value = change,
+    mid = c(-10, 5),
+    better_is = "lower"
+  )
+
+  expect_s3_class(res_asym, "pnp_individual_certainty")
+  expect_identical(res_asym$meta$mid, "[-10.0, 5.0]")
+  expect_equal(res_asym$individual_summary$rope_low, rep(-10, 3))
+  expect_equal(res_asym$individual_summary$rope_high, rep(5, 3))
+  expect_equal(res_asym$individual_summary$improvement_pct, c(1, 0, 0))
+  expect_equal(res_asym$individual_summary$rope_pct, c(0, 1, 0))
+  expect_equal(res_asym$individual_summary$deterioration_pct, c(0, 0, 1))
+  expect_named(res_asym$matrix_data, c("makowski_tier", "MID = [-10.0, 5.0]"))
+
+  out_print <- paste(capture.output(print(res_asym)), collapse = "\n")
+  expect_match(out_print, "MID = \\[-10\\.0, 5\\.0\\]")
+
+  p_volcano <- plot(res_asym)
+  expect_s3_class(p_volcano, "ggplot")
+  expect_equal(p_volcano$layers[[1]]$data$xmin, -10)
+  expect_equal(p_volcano$layers[[1]]$data$xmax, 5)
+
+  # List of asymmetric MID ranges for sensitivity analysis
+  res_asym_seq <- individual_certainty(
+    data = df_asym,
+    id = id,
+    value = change,
+    mid = list(c(-6, 4), c(-10, 5), c(-15, 8)),
+    better_is = "lower"
+  )
+
+  expect_identical(
+    res_asym_seq$meta$mid,
+    c("[-6.0, 4.0]", "[-10.0, 5.0]", "[-15.0, 8.0]")
+  )
+  expect_identical(nrow(res_asym_seq$individual_summary), 9L)
+
+  # Select via range vector or index in plot()
+  p_sel <- plot(res_asym_seq, mid_select = c(-10, 5))
+  expect_s3_class(p_sel, "ggplot")
+  p_sens <- plot(res_asym_seq, type = "sensitivity", thresholds = c(0.5, 0.9))
+  expect_s3_class(p_sens, "ggplot")
 })

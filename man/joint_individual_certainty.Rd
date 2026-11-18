@@ -32,14 +32,23 @@ columns containing the individual posterior draws for each outcome (e.g.,
 \code{values}. Can be supplied as:
 \itemize{
 \item A positive numeric scalar (e.g., \code{2.5}), recycled across all $K$ outcomes
-for a single joint MID evaluation.
+for a single symmetric joint MID evaluation.
+\item An asymmetric numeric range of length 2 with \code{mid[1] < 0} and
+\code{mid[2] > 0} (e.g., \code{c(-10, 5)}), recycled across all $K$ outcomes.
 \item A positive numeric vector of length $K$ (e.g., \code{c(5, 2)} or named
-\code{c(strength = 5, anxiety = 2)}), defining one outcome-specific joint MID
-tuple.
-\item A list of length $K$ of positive numeric vectors (e.g.,
-\code{list(strength = c(4, 5, 6), anxiety = c(1.5, 2.0, 2.5))}), defining $M$
-paired joint MID steps across outcomes for sensitivity analyses and
-multi-column Evidence Matrices. Elements of length 1 are recycled to $M$.
+\code{c(strength = 5, anxiety = 2)}), defining one outcome-specific symmetric
+joint MID tuple.
+\item A list of length $K$ (one element per outcome, optionally named by
+outcome), where each outcome's element can be:
+\itemize{
+\item A positive numeric scalar or vector (e.g., \code{c(4, 5, 6)}), defining 1 or
+$M$ symmetric MID steps for that outcome.
+\item A numeric vector of length 2 with \verb{v[1] < 0 < v[2]} (e.g., \code{c(-10, 5)}),
+defining a single asymmetric ROPE range for that outcome.
+\item A list of scalars or length-2 ranges (e.g.,
+\code{list(c(-10, 5), c(-12, 6))}), defining $M$ steps for that outcome.
+Outcomes with 1 step are recycled to $M$.
+}
 }}
 
 \item{.by}{<\code{\link[dplyr:dplyr_tidy_select]{tidy-select}}> Optional additional
@@ -70,7 +79,8 @@ containing:
 \itemize{
 \item \verb{$individual_summary}: A \code{\link[tibble:tibble]{tibble::tibble()}} with one row per individual
 and joint \code{mid} step containing \verb{<id>}, any \code{.by} grouping columns,
-\code{mid} (character label of the joint MID tuple), \verb{mid_<outcome>} columns,
+\code{mid} (character label of the joint MID tuple), \verb{mid_<outcome>},
+\verb{rope_low_<outcome>}, \verb{rope_high_<outcome>} columns,
 \verb{median_<outcome>}, \verb{ci_low_<outcome>}, \verb{ci_high_<outcome>}, and
 \verb{pd_<outcome>} for each outcome (plus marginal ROPE columns when
 \code{include_marginals = TRUE}), followed by \code{joint_pd}, \code{joint_rope_pct},
@@ -79,9 +89,10 @@ and joint \code{mid} step containing \verb{<id>}, any \code{.by} grouping column
 \item \verb{$matrix_data}: A \code{\link[tibble:tibble]{tibble::tibble()}} representing the inverted Makowski
 Evidence Matrix crossing \code{makowski_tier} (rows) by joint \code{mid} steps
 (columns), stratified by \code{.by} if supplied.
-\item \verb{$meta}: A list of metadata (\code{mid}, \code{mid_grid}, \code{better_is}, \code{ci},
-\code{id_col}, \code{group_cols}, \code{value_cols}, \code{draw_col}, \code{include_marginals},
-\code{n_individuals}, and \code{matrix_long}).
+\item \verb{$meta}: A list of metadata (\code{mid}, \code{mid_grid}, \code{rope_low_grid},
+\code{rope_high_grid}, \code{better_is}, \code{ci}, \code{id_col}, \code{group_cols},
+\code{value_cols}, \code{draw_col}, \code{include_marginals}, \code{n_individuals}, and
+\code{matrix_long}).
 }
 }
 \description{

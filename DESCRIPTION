@@ -10,7 +10,7 @@ Description: Evaluate clinical certainty and practical significance for
     Facilitates Region of Practical Equivalence (ROPE) and Minimal
     Important Difference (MID) evaluations using Bayesian posterior
     distributions generated via 'tidybayes' or empirical longitudinal data.
-    Provides functions to calculate univariate, joint, and group-level
+    Provides functions to calculate univariate and joint individual-level
     clinical certainty classifications, compute sensitivity heatmaps across
     threshold sequences, and visualize model diagnostics and clinical
     boundaries with custom 'ggplot2' geoms, palettes, and publication-ready

@@ -27,9 +27,19 @@ uniquely identifying individuals (default \code{id}), or \code{NULL} for single-
 name containing the individual target estimate per draw (e.g., \code{.epred},
 \code{net_change}). Defaults to \code{.epred}.}
 
-\item{mid}{Numeric scalar (e.g., \code{2.5}) or numeric vector of positive values
-(e.g., \code{seq(1.5, 3.5, by = 0.5)}) defining the Minimal Important
-Difference threshold(s).}
+\item{mid}{Minimal Important Difference threshold(s). Can be supplied as:
+\itemize{
+\item A positive numeric scalar (e.g., \code{2.5}), defining a symmetric ROPE
+\code{c(-2.5, 2.5)}.
+\item A numeric vector of length 2 with \code{mid[1] < 0} and \code{mid[2] > 0} (e.g.,
+\code{c(-10, 5)}), defining a single asymmetric ROPE range.
+\item A numeric vector of positive values (e.g., \code{seq(1.5, 3.5, by = 0.5)}),
+defining multiple symmetric MID thresholds for sensitivity analyses.
+\item A list of MID thresholds (e.g., \code{list(c(-10, 5), c(-12, 6))}), where each
+element is either a positive scalar or a numeric vector of length 2 with
+\verb{mid[1] < 0 < mid[2]}, defining multiple MID steps (symmetric or
+asymmetric).
+}}
 
 \item{.by}{<\code{\link[dplyr:dplyr_tidy_select]{tidy-select}}> Optional additional
 grouping column(s) such as therapy condition (e.g., \code{.by = group} or
@@ -49,15 +59,15 @@ name identifying the MCMC draw index (default \code{.draw}).}
 An S3 list object of class \code{"pnp_individual_certainty"} containing:
 \itemize{
 \item \verb{$individual_summary}: A \code{\link[tibble:tibble]{tibble::tibble()}} with one row per individual
-and \code{mid} value containing \verb{<id>}, any \code{.by} grouping columns, \code{mid},
-\code{median}, \code{ci_low}, \code{ci_high}, \code{pd}, \code{rope_pct}, \code{improvement_pct},
-\code{deterioration_pct}, \code{directed_certainty}, \code{signed_certainty}, and
-\code{makowski_tier} (an ordered factor).
+and \code{mid} step containing \verb{<id>}, any \code{.by} grouping columns, \code{mid},
+\code{rope_low}, \code{rope_high}, \code{median}, \code{ci_low}, \code{ci_high}, \code{pd}, \code{rope_pct},
+\code{improvement_pct}, \code{deterioration_pct}, \code{directed_certainty},
+\code{signed_certainty}, and \code{makowski_tier} (an ordered factor).
 \item \verb{$matrix_data}: A \code{\link[tibble:tibble]{tibble::tibble()}} representing the inverted Makowski
 Evidence Matrix crossing \code{makowski_tier} (rows) by \code{mid} thresholds
 (columns), stratified by \code{.by} if supplied.
-\item \verb{$meta}: A list of metadata (\code{mid}, \code{better_is}, \code{ci}, \code{id_col},
-\code{group_cols}, \code{value_col}, \code{draw_col}, \code{n_individuals}, and
+\item \verb{$meta}: A list of metadata (\code{mid}, \code{mid_bounds}, \code{better_is}, \code{ci},
+\code{id_col}, \code{group_cols}, \code{value_col}, \code{draw_col}, \code{n_individuals}, and
 \code{matrix_long}).
 }
 }

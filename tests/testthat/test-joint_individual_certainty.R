@@ -202,3 +202,60 @@ test_that("joint_individual_certainty() validates arguments with informative cli
     class = "peoplenotp_error_bad_include_marginals"
   )
 })
+
+test_that("joint_individual_certainty() supports asymmetric MID ranges per outcome and in plots", {
+  # P1: strength = +12 (> 10 -> imp), anxiety = -4 (< -3 -> imp) -> 100% joint imp
+  # P2: strength = -3 (in [-5, 10] -> ROPE), anxiety = +1 (in [-3, 2] -> ROPE) -> 100% joint ROPE
+  # P3: strength = -7 (< -5 -> det), anxiety = +4 (> 2 -> det) -> 100% joint det
+  df_asym <- tibble::tibble(
+    id = rep(c("P1", "P2", "P3"), each = 100),
+    .draw = rep(1:100, times = 3),
+    strength = c(rep(12, 100), rep(-3, 100), rep(-7, 100)),
+    anxiety = c(rep(-4, 100), rep(1, 100), rep(4, 100))
+  )
+
+  res_asym <- joint_individual_certainty(
+    data = df_asym,
+    id = id,
+    values = c(strength, anxiety),
+    mid = list(strength = c(-5, 10), anxiety = c(-3, 2)),
+    better_is = c("higher", "lower"),
+    include_marginals = TRUE
+  )
+
+  expect_s3_class(res_asym, "pnp_joint_individual_certainty")
+  expect_identical(res_asym$meta$mid, "[-5.0, 10.0] / [-3.0, 2.0]")
+  expect_equal(res_asym$individual_summary$rope_low_strength, rep(-5, 3))
+  expect_equal(res_asym$individual_summary$rope_high_strength, rep(10, 3))
+  expect_equal(res_asym$individual_summary$rope_low_anxiety, rep(-3, 3))
+  expect_equal(res_asym$individual_summary$rope_high_anxiety, rep(2, 3))
+  expect_equal(res_asym$individual_summary$joint_improvement_pct, c(1, 0, 0))
+  expect_equal(res_asym$individual_summary$joint_rope_pct, c(0, 1, 0))
+  expect_equal(res_asym$individual_summary$joint_deterioration_pct, c(0, 0, 1))
+
+  out_print <- paste(capture.output(print(res_asym)), collapse = "\n")
+  expect_match(out_print, "MID = \\[-5\\.0, 10\\.0\\] / \\[-3\\.0, 2\\.0\\]")
+
+  p_joint <- plot(res_asym)
+  expect_s3_class(p_joint, "ggplot")
+
+  # Sequence of asymmetric steps for sensitivity analysis
+  res_asym_seq <- joint_individual_certainty(
+    data = df_asym,
+    id = id,
+    values = c(strength, anxiety),
+    mid = list(
+      strength = list(c(-5, 10), c(-8, 15)),
+      anxiety = c(-3, 2)
+    ),
+    better_is = c("higher", "lower")
+  )
+  expect_identical(
+    res_asym_seq$meta$mid,
+    c("[-5.0, 10.0] / [-3.0, 2.0]", "[-8.0, 15.0] / [-3.0, 2.0]")
+  )
+  expect_identical(nrow(res_asym_seq$individual_summary), 6L)
+
+  p_sens <- plot(res_asym_seq, type = "sensitivity", thresholds = c(0.5, 0.9))
+  expect_s3_class(p_sens, "ggplot")
+})

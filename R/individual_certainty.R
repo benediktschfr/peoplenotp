@@ -18,9 +18,17 @@
 #' @param value <[`data-masking`][rlang::args_data_masking]> Unquoted column
 #'   name containing the individual target estimate per draw (e.g., `.epred`,
 #'   `net_change`). Defaults to `.epred`.
-#' @param mid Numeric scalar (e.g., `2.5`) or numeric vector of positive values
-#'   (e.g., `seq(1.5, 3.5, by = 0.5)`) defining the Minimal Important
-#'   Difference threshold(s).
+#' @param mid Minimal Important Difference threshold(s). Can be supplied as:
+#'   * A positive numeric scalar (e.g., `2.5`), defining a symmetric ROPE
+#'     `c(-2.5, 2.5)`.
+#'   * A numeric vector of length 2 with `mid[1] < 0` and `mid[2] > 0` (e.g.,
+#'     `c(-10, 5)`), defining a single asymmetric ROPE range.
+#'   * A numeric vector of positive values (e.g., `seq(1.5, 3.5, by = 0.5)`),
+#'     defining multiple symmetric MID thresholds for sensitivity analyses.
+#'   * A list of MID thresholds (e.g., `list(c(-10, 5), c(-12, 6))`), where each
+#'     element is either a positive scalar or a numeric vector of length 2 with
+#'     `mid[1] < 0 < mid[2]`, defining multiple MID steps (symmetric or
+#'     asymmetric).
 #' @param .by <[`tidy-select`][dplyr::dplyr_tidy_select]> Optional additional
 #'   grouping column(s) such as therapy condition (e.g., `.by = group` or
 #'   `.by = c(group, site)`). When provided (or when `data` is grouped via
@@ -34,15 +42,15 @@
 #'
 #' @return An S3 list object of class `"pnp_individual_certainty"` containing:
 #'   * `$individual_summary`: A [tibble::tibble()] with one row per individual
-#'     and `mid` value containing `<id>`, any `.by` grouping columns, `mid`,
-#'     `median`, `ci_low`, `ci_high`, `pd`, `rope_pct`, `improvement_pct`,
-#'     `deterioration_pct`, `directed_certainty`, `signed_certainty`, and
-#'     `makowski_tier` (an ordered factor).
+#'     and `mid` step containing `<id>`, any `.by` grouping columns, `mid`,
+#'     `rope_low`, `rope_high`, `median`, `ci_low`, `ci_high`, `pd`, `rope_pct`,
+#'     `improvement_pct`, `deterioration_pct`, `directed_certainty`,
+#'     `signed_certainty`, and `makowski_tier` (an ordered factor).
 #'   * `$matrix_data`: A [tibble::tibble()] representing the inverted Makowski
 #'     Evidence Matrix crossing `makowski_tier` (rows) by `mid` thresholds
 #'     (columns), stratified by `.by` if supplied.
-#'   * `$meta`: A list of metadata (`mid`, `better_is`, `ci`, `id_col`,
-#'     `group_cols`, `value_col`, `draw_col`, `n_individuals`, and
+#'   * `$meta`: A list of metadata (`mid`, `mid_bounds`, `better_is`, `ci`,
+#'     `id_col`, `group_cols`, `value_col`, `draw_col`, `n_individuals`, and
 #'     `matrix_long`).
 #'
 #' @examples
@@ -87,22 +95,9 @@ individual_certainty <- function(
     )
   }
 
-  if (
-    missing(mid) ||
-      !is.numeric(mid) ||
-      length(mid) == 0L ||
-      any(is.na(mid)) ||
-      any(is.infinite(mid)) ||
-      any(mid <= 0)
-  ) {
-    cli::cli_abort(
-      c(
-        "x" = "Argument {.arg mid} must be a positive numeric scalar or vector.",
-        "i" = "Received {.val {if (missing(mid)) NULL else mid}}."
-      ),
-      class = "peoplenotp_error_bad_mid"
-    )
-  }
+  mid_info <- resolve_individual_mid(mid)
+  mid_vals <- mid_info$mid_vals
+  mid_bounds <- mid_info$mid_bounds
 
   if (identical(better_is, c("lower", "higher"))) {
     better_is <- "lower"
@@ -178,7 +173,6 @@ individual_certainty <- function(
     )
   }
 
-  mid_vals <- unique(mid)
   summary_by <- c(id_name, group_cols)
 
   base_summary <- dplyr::summarise(
@@ -190,12 +184,18 @@ individual_certainty <- function(
     .by = dplyr::all_of(summary_by)
   )
 
-  mid_summaries <- lapply(mid_vals, function(m) {
+  mid_summaries <- lapply(seq_len(nrow(mid_bounds)), function(step_idx) {
+    m_val <- mid_bounds$mid[[step_idx]]
+    r_low <- mid_bounds$rope_low[[step_idx]]
+    r_high <- mid_bounds$rope_high[[step_idx]]
+
     rope_df <- dplyr::summarise(
       ungrouped_data,
       compute_individual_mid(
         draws = .data[[value_name]],
-        m = m,
+        m = m_val,
+        rope_low = r_low,
+        rope_high = r_high,
         better_is = better_is
       ),
       .by = dplyr::all_of(summary_by)
@@ -210,6 +210,8 @@ individual_certainty <- function(
       merged,
       dplyr::all_of(summary_by),
       mid,
+      rope_low,
+      rope_high,
       median,
       ci_low,
       ci_high,
@@ -243,6 +245,7 @@ individual_certainty <- function(
 
   meta <- list(
     mid = mid_vals,
+    mid_bounds = mid_bounds,
     better_is = better_is,
     ci = ci,
     id_col = id_name,
@@ -307,7 +310,8 @@ print.pnp_individual_certainty <- function(
 
   selected_mids <- resolve_print_mids(
     available_mids = x$meta$mid,
-    mid_select = mid_select
+    mid_select = mid_select,
+    mid_bounds = x$meta$mid_bounds
   )
 
   group_cols <- x$meta$group_cols %||% character(0)
@@ -644,28 +648,25 @@ plot.pnp_individual_certainty <- function(
     y_lab <- "Directed Clinical Certainty"
   }
 
-  available_mids <- x$meta$mid
-  if (is.null(mid_select)) {
-    selected_mid <- available_mids[[1]]
-  } else {
-    if (
-      !is.numeric(mid_select) ||
-        length(mid_select) != 1L ||
-        is.na(mid_select) ||
-        !mid_select %in% available_mids
-    ) {
-      cli::cli_abort(
-        c(
-          "x" = "Argument {.arg mid_select} must be a single value present in `x$meta$mid` ({.val {available_mids}}).",
-          "i" = "Received {.val {mid_select}}."
-        ),
-        class = "peoplenotp_error_bad_mid_select"
-      )
-    }
-    selected_mid <- mid_select
-  }
+  selected_mid <- resolve_print_mids(
+    available_mids = x$meta$mid,
+    mid_select = mid_select,
+    mid_bounds = x$meta$mid_bounds,
+    single = TRUE
+  )
 
   plot_df <- dplyr::filter(x$individual_summary, mid == selected_mid)
+  step_idx <- match(selected_mid, x$meta$mid)
+  if (!is.null(x$meta$mid_bounds) && !is.na(step_idx)) {
+    r_low <- x$meta$mid_bounds$rope_low[[step_idx]]
+    r_high <- x$meta$mid_bounds$rope_high[[step_idx]]
+  } else if (all(c("rope_low", "rope_high") %in% names(plot_df))) {
+    r_low <- plot_df$rope_low[[1]]
+    r_high <- plot_df$rope_high[[1]]
+  } else {
+    r_low <- -selected_mid
+    r_high <- selected_mid
+  }
 
   if (x$meta$better_is == "lower") {
     left_label <- "\u2190 Favors Improvement"
@@ -716,7 +717,7 @@ plot.pnp_individual_certainty <- function(
       color = .data[[color_col]]
     )
   ) +
-    geom_rope(x_range = c(-selected_mid, selected_mid)) +
+    geom_rope(x_range = c(r_low, r_high)) +
     ggplot2::geom_vline(
       xintercept = 0,
       linetype = "dotted"
@@ -777,39 +778,236 @@ plot.pnp_individual_certainty <- function(
   p
 }
 
-#' Resolve MID selection for `print.pnp_individual_certainty()`
+#' Resolve and normalize `mid` input for `individual_certainty()`
 #'
-#' @param available_mids Numeric vector of MIDs stored in `x$meta$mid`.
-#' @param mid_select User-supplied `mid_select` (`NULL` or numeric vector).
+#' @param mid User-supplied `mid` argument.
 #'
-#' @return Numeric vector of selected MIDs.
+#' @return A list with `mid_vals` and `mid_bounds` tibble.
 #' @noRd
-resolve_print_mids <- function(available_mids, mid_select = NULL) {
+resolve_individual_mid <- function(mid) {
+  abort_bad_mid <- function(val) {
+    cli::cli_abort(
+      c(
+        "x" = "Argument {.arg mid} must be a positive numeric scalar/vector, an asymmetric range `c(low, high)` with `low < 0 < high`, or a list of such thresholds.",
+        "i" = "Received {.val {val}}."
+      ),
+      class = "peoplenotp_error_bad_mid"
+    )
+  }
+
+  if (missing(mid) || is.null(mid)) {
+    abort_bad_mid(NULL)
+  }
+
+  format_range_lbl <- function(low, high) {
+    paste0(
+      "[",
+      format(low, trim = TRUE, nsmall = 1),
+      ", ",
+      format(high, trim = TRUE, nsmall = 1),
+      "]"
+    )
+  }
+
+  format_scalar_lbl <- function(m) {
+    format(m, trim = TRUE, nsmall = 1)
+  }
+
+  if (is.numeric(mid)) {
+    if (length(mid) == 0L || any(is.na(mid)) || any(is.infinite(mid))) {
+      abort_bad_mid(mid)
+    }
+
+    if (length(mid) == 2L && mid[[1]] < 0 && mid[[2]] > 0) {
+      low_val <- as.numeric(mid[[1]])
+      high_val <- as.numeric(mid[[2]])
+      lbl <- format_range_lbl(low_val, high_val)
+      bounds <- tibble::tibble(
+        mid = lbl,
+        mid_label = lbl,
+        rope_low = low_val,
+        rope_high = high_val,
+        is_asymmetric = TRUE
+      )
+      return(list(mid_vals = lbl, mid_bounds = bounds))
+    }
+
+    if (all(mid > 0)) {
+      mid_num <- unique(as.numeric(mid))
+      lbls <- vapply(mid_num, format_scalar_lbl, character(1))
+      bounds <- tibble::tibble(
+        mid = mid_num,
+        mid_label = lbls,
+        rope_low = -mid_num,
+        rope_high = mid_num,
+        is_asymmetric = FALSE
+      )
+      return(list(mid_vals = mid_num, mid_bounds = bounds))
+    }
+
+    abort_bad_mid(mid)
+  }
+
+  if (is.list(mid) && !is.data.frame(mid) && length(mid) >= 1L) {
+    parsed_rows <- lapply(mid, function(el) {
+      if (
+        !is.numeric(el) ||
+          length(el) == 0L ||
+          any(is.na(el)) ||
+          any(is.infinite(el))
+      ) {
+        abort_bad_mid(mid)
+      }
+      if (length(el) == 1L && el > 0) {
+        m_val <- as.numeric(el)
+        tibble::tibble(
+          num_val = m_val,
+          mid_label = format_scalar_lbl(m_val),
+          rope_low = -m_val,
+          rope_high = m_val,
+          is_asymmetric = FALSE
+        )
+      } else if (length(el) == 2L && el[[1]] < 0 && el[[2]] > 0) {
+        tibble::tibble(
+          num_val = NA_real_,
+          mid_label = format_range_lbl(el[[1]], el[[2]]),
+          rope_low = as.numeric(el[[1]]),
+          rope_high = as.numeric(el[[2]]),
+          is_asymmetric = TRUE
+        )
+      } else {
+        abort_bad_mid(mid)
+      }
+    })
+
+    bounds <- dplyr::bind_rows(parsed_rows)
+    bounds <- dplyr::distinct(bounds, rope_low, rope_high, .keep_all = TRUE)
+
+    if (any(bounds$is_asymmetric)) {
+      mid_vals <- bounds$mid_label
+      bounds$mid <- mid_vals
+    } else {
+      mid_vals <- bounds$num_val
+      bounds$mid <- mid_vals
+    }
+    bounds$num_val <- NULL
+    bounds <- dplyr::select(
+      bounds,
+      mid,
+      mid_label,
+      rope_low,
+      rope_high,
+      is_asymmetric
+    )
+    return(list(mid_vals = mid_vals, mid_bounds = bounds))
+  }
+
+  abort_bad_mid(mid)
+}
+
+#' Resolve MID selection for `print.pnp_individual_certainty()` and `plot.pnp_individual_certainty()`
+#'
+#' @param available_mids Vector of MIDs stored in `x$meta$mid`.
+#' @param mid_select User-supplied `mid_select`.
+#' @param mid_bounds Optional `mid_bounds` tibble from `x$meta$mid_bounds`.
+#' @param single Logical; whether only a single MID selection is allowed.
+#' @param default_all Logical; whether `NULL` selects all MIDs.
+#'
+#' @return Vector of selected MIDs matching `available_mids` type.
+#' @noRd
+resolve_print_mids <- function(
+  available_mids,
+  mid_select = NULL,
+  mid_bounds = NULL,
+  single = FALSE,
+  default_all = FALSE
+) {
+  n_mids <- length(available_mids)
   if (is.null(mid_select)) {
-    n_mids <- length(available_mids)
-    if (n_mids <= 2L) {
+    if (isTRUE(single)) {
+      return(available_mids[[1]])
+    }
+    if (isTRUE(default_all) || n_mids <= 2L) {
       return(available_mids)
     }
     mid_idx <- ceiling(n_mids / 2)
     return(unique(available_mids[c(1L, mid_idx, n_mids)]))
   }
 
+  resolved <- NULL
+
   if (
-    !is.numeric(mid_select) ||
-      length(mid_select) == 0L ||
-      any(is.na(mid_select)) ||
-      !all(mid_select %in% available_mids)
+    (is.numeric(mid_select) || is.character(mid_select)) &&
+      length(mid_select) >= 1L &&
+      !any(is.na(mid_select)) &&
+      all(mid_select %in% available_mids)
   ) {
+    resolved <- unique(mid_select)
+  } else if (
+    is.numeric(mid_select) &&
+      length(mid_select) == 2L &&
+      !any(is.na(mid_select)) &&
+      mid_select[[1]] < 0 &&
+      mid_select[[2]] > 0 &&
+      !is.null(mid_bounds)
+  ) {
+    idx <- which(
+      mid_bounds$rope_low == mid_select[[1]] &
+        mid_bounds$rope_high == mid_select[[2]]
+    )
+    if (length(idx) >= 1L) {
+      resolved <- unique(available_mids[idx])
+    }
+  } else if (
+    is.list(mid_select) &&
+      length(mid_select) >= 1L &&
+      !is.null(mid_bounds)
+  ) {
+    matched_idx <- integer(0)
+    ok <- TRUE
+    for (el in mid_select) {
+      if (is.numeric(el) && length(el) == 2L && !any(is.na(el))) {
+        idx <- which(
+          mid_bounds$rope_low == el[[1]] & mid_bounds$rope_high == el[[2]]
+        )
+      } else if (is.numeric(el) && length(el) == 1L && !is.na(el)) {
+        idx <- which(
+          mid_bounds$rope_low == -el & mid_bounds$rope_high == el
+        )
+      } else {
+        idx <- integer(0)
+      }
+      if (length(idx) == 0L) {
+        ok <- FALSE
+        break
+      }
+      matched_idx <- c(matched_idx, idx)
+    }
+    if (ok && length(matched_idx) >= 1L) {
+      resolved <- unique(available_mids[matched_idx])
+    }
+  } else if (
+    is.character(available_mids) &&
+      is.numeric(mid_select) &&
+      length(mid_select) >= 1L &&
+      !any(is.na(mid_select)) &&
+      all(mid_select == trunc(mid_select)) &&
+      all(mid_select >= 1L & mid_select <= n_mids)
+  ) {
+    resolved <- unique(available_mids[as.integer(mid_select)])
+  }
+
+  if (is.null(resolved) || (isTRUE(single) && length(resolved) != 1L)) {
     cli::cli_abort(
       c(
-        "x" = "Argument {.arg mid_select} must contain values present in `x$meta$mid` ({.val {available_mids}}).",
+        "x" = "Argument {.arg mid_select} must {if (single) 'be a single value' else 'contain values'} present in `x$meta$mid` ({.val {available_mids}}).",
         "i" = "Received {.val {mid_select}}."
       ),
       class = "peoplenotp_error_bad_mid_select"
     )
   }
 
-  unique(mid_select)
+  resolved
 }
 
 #' Build and plot the clinical certainty sensitivity heatmap for `pnp_individual_certainty`
@@ -876,26 +1074,13 @@ plot_individual_sensitivity <- function(
     )
   }
 
-  available_mids <- x$meta$mid
-  if (is.null(mid_select)) {
-    selected_mids <- available_mids
-  } else {
-    if (
-      !is.numeric(mid_select) ||
-        length(mid_select) == 0L ||
-        any(is.na(mid_select)) ||
-        !all(mid_select %in% available_mids)
-    ) {
-      cli::cli_abort(
-        c(
-          "x" = "Argument {.arg mid_select} must contain values present in `x$meta$mid` ({.val {available_mids}}).",
-          "i" = "Received {.val {mid_select}}."
-        ),
-        class = "peoplenotp_error_bad_mid_select"
-      )
-    }
-    selected_mids <- unique(mid_select)
-  }
+  selected_mids <- resolve_print_mids(
+    available_mids = x$meta$mid,
+    mid_select = mid_select,
+    mid_bounds = x$meta$mid_bounds,
+    single = FALSE,
+    default_all = TRUE
+  )
 
   fill_scale <- resolve_sensitivity_fill_scale(
     color_palette = color_palette,
@@ -924,9 +1109,16 @@ plot_individual_sensitivity <- function(
     t_base = t_base,
     t_step = t_step
   )
+  if (is.character(selected_mids)) {
+    grid_df$mid <- factor(grid_df$mid, levels = selected_mids)
+  }
 
   if (outcome == "both") {
-    x_annot <- mean(range(selected_mids))
+    x_annot <- if (is.character(selected_mids)) {
+      (length(selected_mids) + 1) / 2
+    } else {
+      mean(range(selected_mids))
+    }
     y_annot <- t_span * 1.12
     y_lim <- t_span * 1.24
     y_breaks <- seq(-t_span, t_span, length.out = 5)
@@ -1304,20 +1496,28 @@ compute_individual_base <- function(draws, ci) {
 #' Compute MID-specific individual ROPE metrics
 #'
 #' @param draws Numeric vector of posterior draws.
-#' @param m Positive numeric MID scalar.
+#' @param m MID step value or label.
+#' @param rope_low Lower ROPE boundary.
+#' @param rope_high Upper ROPE boundary.
 #' @param better_is `"lower"` or `"higher"`.
 #'
 #' @return A single-row tibble.
 #' @noRd
-compute_individual_mid <- function(draws, m, better_is) {
-  rope_pct <- mean(draws >= -m & draws <= m, na.rm = TRUE)
+compute_individual_mid <- function(
+  draws,
+  m,
+  rope_low = -m,
+  rope_high = m,
+  better_is
+) {
+  rope_pct <- mean(draws >= rope_low & draws <= rope_high, na.rm = TRUE)
 
   if (better_is == "lower") {
-    imp_pct <- mean(draws < -m, na.rm = TRUE)
-    det_pct <- mean(draws > m, na.rm = TRUE)
+    imp_pct <- mean(draws < rope_low, na.rm = TRUE)
+    det_pct <- mean(draws > rope_high, na.rm = TRUE)
   } else {
-    imp_pct <- mean(draws > m, na.rm = TRUE)
-    det_pct <- mean(draws < -m, na.rm = TRUE)
+    imp_pct <- mean(draws > rope_high, na.rm = TRUE)
+    det_pct <- mean(draws < rope_low, na.rm = TRUE)
   }
 
   dir_cert <- pmax(imp_pct, det_pct)
@@ -1325,6 +1525,8 @@ compute_individual_mid <- function(draws, m, better_is) {
 
   tibble::tibble(
     mid = m,
+    rope_low = rope_low,
+    rope_high = rope_high,
     rope_pct = rope_pct,
     improvement_pct = imp_pct,
     deterioration_pct = det_pct,
@@ -1430,8 +1632,13 @@ format_evidence_matrix_wide <- function(
   format = "both",
   digits = 1
 ) {
+  formatted_mids <- if (is.numeric(mid_vals)) {
+    format(mid_vals, trim = TRUE, nsmall = 1)
+  } else {
+    as.character(mid_vals)
+  }
   mid_labels <- stats::setNames(
-    paste0("MID = ", format(mid_vals, trim = TRUE, nsmall = 1)),
+    paste0("MID = ", formatted_mids),
     as.character(mid_vals)
   )
 

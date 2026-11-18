@@ -26,14 +26,21 @@
 #' @param mid Minimal Important Difference threshold(s) for the selected
 #'   `values`. Can be supplied as:
 #'   * A positive numeric scalar (e.g., `2.5`), recycled across all $K$ outcomes
-#'     for a single joint MID evaluation.
+#'     for a single symmetric joint MID evaluation.
+#'   * An asymmetric numeric range of length 2 with `mid[1] < 0` and
+#'     `mid[2] > 0` (e.g., `c(-10, 5)`), recycled across all $K$ outcomes.
 #'   * A positive numeric vector of length $K$ (e.g., `c(5, 2)` or named
-#'     `c(strength = 5, anxiety = 2)`), defining one outcome-specific joint MID
-#'     tuple.
-#'   * A list of length $K$ of positive numeric vectors (e.g.,
-#'     `list(strength = c(4, 5, 6), anxiety = c(1.5, 2.0, 2.5))`), defining $M$
-#'     paired joint MID steps across outcomes for sensitivity analyses and
-#'     multi-column Evidence Matrices. Elements of length 1 are recycled to $M$.
+#'     `c(strength = 5, anxiety = 2)`), defining one outcome-specific symmetric
+#'     joint MID tuple.
+#'   * A list of length $K$ (one element per outcome, optionally named by
+#'     outcome), where each outcome's element can be:
+#'     - A positive numeric scalar or vector (e.g., `c(4, 5, 6)`), defining 1 or
+#'       $M$ symmetric MID steps for that outcome.
+#'     - A numeric vector of length 2 with `v[1] < 0 < v[2]` (e.g., `c(-10, 5)`),
+#'       defining a single asymmetric ROPE range for that outcome.
+#'     - A list of scalars or length-2 ranges (e.g.,
+#'       `list(c(-10, 5), c(-12, 6))`), defining $M$ steps for that outcome.
+#'     Outcomes with 1 step are recycled to $M$.
 #' @param .by <[`tidy-select`][dplyr::dplyr_tidy_select]> Optional additional
 #'   grouping column(s) such as therapy condition (e.g., `.by = group`). When
 #'   provided (or when `data` is grouped via [dplyr::group_by()]),
@@ -56,7 +63,8 @@
 #'   containing:
 #'   * `$individual_summary`: A [tibble::tibble()] with one row per individual
 #'     and joint `mid` step containing `<id>`, any `.by` grouping columns,
-#'     `mid` (character label of the joint MID tuple), `mid_<outcome>` columns,
+#'     `mid` (character label of the joint MID tuple), `mid_<outcome>`,
+#'     `rope_low_<outcome>`, `rope_high_<outcome>` columns,
 #'     `median_<outcome>`, `ci_low_<outcome>`, `ci_high_<outcome>`, and
 #'     `pd_<outcome>` for each outcome (plus marginal ROPE columns when
 #'     `include_marginals = TRUE`), followed by `joint_pd`, `joint_rope_pct`,
@@ -65,9 +73,10 @@
 #'   * `$matrix_data`: A [tibble::tibble()] representing the inverted Makowski
 #'     Evidence Matrix crossing `makowski_tier` (rows) by joint `mid` steps
 #'     (columns), stratified by `.by` if supplied.
-#'   * `$meta`: A list of metadata (`mid`, `mid_grid`, `better_is`, `ci`,
-#'     `id_col`, `group_cols`, `value_cols`, `draw_col`, `include_marginals`,
-#'     `n_individuals`, and `matrix_long`).
+#'   * `$meta`: A list of metadata (`mid`, `mid_grid`, `rope_low_grid`,
+#'     `rope_high_grid`, `better_is`, `ci`, `id_col`, `group_cols`,
+#'     `value_cols`, `draw_col`, `include_marginals`, `n_individuals`, and
+#'     `matrix_long`).
 #'
 #' @examples
 #' set.seed(123)
@@ -197,6 +206,8 @@ joint_individual_certainty <- function(
   better_is_vec <- resolve_joint_better_is(better_is, value_names)
   mid_info <- resolve_joint_mid(mid, value_names)
   mid_grid <- mid_info$mid_grid
+  rope_low_grid <- mid_info$rope_low_grid
+  rope_high_grid <- mid_info$rope_high_grid
   mid_labels <- mid_info$mid_labels
 
   group_cols <- resolve_group_columns(
@@ -227,8 +238,12 @@ joint_individual_certainty <- function(
   )
 
   mid_summaries <- lapply(seq_len(nrow(mid_grid)), function(step_idx) {
-    step_mids <- as.numeric(mid_grid[step_idx, ])
+    step_mids <- lapply(value_names, function(vn) mid_grid[[vn]][[step_idx]])
     names(step_mids) <- value_names
+    step_lows <- as.numeric(rope_low_grid[step_idx, ])
+    names(step_lows) <- value_names
+    step_highs <- as.numeric(rope_high_grid[step_idx, ])
+    names(step_highs) <- value_names
     step_label <- mid_labels[[step_idx]]
 
     rope_df <- dplyr::summarise(
@@ -237,6 +252,8 @@ joint_individual_certainty <- function(
         df_sub = dplyr::pick(dplyr::all_of(value_names)),
         value_names = value_names,
         step_mids = step_mids,
+        step_lows = step_lows,
+        step_highs = step_highs,
         step_label = step_label,
         better_is_vec = better_is_vec,
         include_marginals = include_marginals
@@ -250,7 +267,12 @@ joint_individual_certainty <- function(
       dplyr::left_join(base_summary, rope_df, by = summary_by)
     }
 
-    mid_col_names <- paste0("mid_", value_names)
+    mid_col_names <- unlist(
+      lapply(value_names, function(vn) {
+        paste0(c("mid_", "rope_low_", "rope_high_"), vn)
+      }),
+      use.names = FALSE
+    )
     base_col_names <- unlist(
       lapply(value_names, function(vn) {
         cols <- paste0(c("median_", "ci_low_", "ci_high_", "pd_"), vn)
@@ -302,6 +324,8 @@ joint_individual_certainty <- function(
   meta <- list(
     mid = mid_labels,
     mid_grid = mid_grid,
+    rope_low_grid = rope_low_grid,
+    rope_high_grid = rope_high_grid,
     better_is = better_is_vec,
     ci = ci,
     id_col = id_name,
@@ -719,8 +743,19 @@ plot.pnp_joint_individual_certainty <- function(
   col_y <- pair_cols[[2]]
 
   step_idx <- match(selected_mid, x$meta$mid)
-  mid_x <- as.numeric(x$meta$mid_grid[step_idx, col_x])
-  mid_y <- as.numeric(x$meta$mid_grid[step_idx, col_y])
+  if (!is.null(x$meta$rope_low_grid) && !is.null(x$meta$rope_high_grid)) {
+    low_x <- as.numeric(x$meta$rope_low_grid[step_idx, col_x])
+    high_x <- as.numeric(x$meta$rope_high_grid[step_idx, col_x])
+    low_y <- as.numeric(x$meta$rope_low_grid[step_idx, col_y])
+    high_y <- as.numeric(x$meta$rope_high_grid[step_idx, col_y])
+  } else {
+    mid_x <- as.numeric(x$meta$mid_grid[step_idx, col_x])
+    mid_y <- as.numeric(x$meta$mid_grid[step_idx, col_y])
+    low_x <- -mid_x
+    high_x <- mid_x
+    low_y <- -mid_y
+    high_y <- mid_y
+  }
   dir_x <- unname(x$meta$better_is[[col_x]])
   dir_y <- unname(x$meta$better_is[[col_y]])
 
@@ -791,16 +826,16 @@ plot.pnp_joint_individual_certainty <- function(
   if (isTRUE(show_rops)) {
     p <- p +
       geom_rops(
-        x_range = c(-mid_x, mid_x),
-        y_range = c(-mid_y, mid_y),
+        x_range = c(low_x, high_x),
+        y_range = c(low_y, high_y),
         better_is = c(dir_x, dir_y)
       )
   }
 
   p <- p +
     geom_rope(
-      x_range = c(-mid_x, mid_x),
-      y_range = c(-mid_y, mid_y),
+      x_range = c(low_x, high_x),
+      y_range = c(low_y, high_y),
       linetype = "dashed"
     ) +
     ggplot2::geom_vline(xintercept = 0, linetype = "dotted") +
@@ -905,17 +940,43 @@ resolve_joint_better_is <- function(better_is, value_names) {
 resolve_joint_mid <- function(mid, value_names) {
   k <- length(value_names)
 
-  if (missing(mid) || is.null(mid)) {
+  abort_bad_mid <- function(msg = NULL, info = NULL) {
     cli::cli_abort(
       c(
-        "x" = "Argument {.arg mid} must be a positive numeric scalar, a numeric vector of length {k}, or a list of length {k} of positive numeric vectors.",
-        "i" = "Received {.val {if (missing(mid)) NULL else mid}}."
+        "x" = msg %||%
+          paste0(
+            "Argument {.arg mid} must be a positive numeric scalar, an asymmetric range `c(low, high)` with `low < 0 < high`, a positive numeric vector of length ",
+            k,
+            ", or a list of length ",
+            k,
+            "."
+          ),
+        "i" = info %||%
+          "Received {.val {if (missing(mid)) NULL else mid}}."
       ),
       class = "peoplenotp_error_bad_mid"
     )
   }
 
-  is_valid_num <- function(v) {
+  if (missing(mid) || is.null(mid)) {
+    abort_bad_mid()
+  }
+
+  format_range_lbl <- function(low, high) {
+    paste0(
+      "[",
+      format(low, trim = TRUE, nsmall = 1),
+      ", ",
+      format(high, trim = TRUE, nsmall = 1),
+      "]"
+    )
+  }
+
+  format_scalar_lbl <- function(m) {
+    format(m, trim = TRUE, nsmall = 1)
+  }
+
+  is_valid_pos_num <- function(v) {
     is.numeric(v) &&
       length(v) >= 1L &&
       !any(is.na(v)) &&
@@ -923,38 +984,106 @@ resolve_joint_mid <- function(mid, value_names) {
       all(v > 0)
   }
 
+  is_asym_range <- function(v) {
+    is.numeric(v) &&
+      length(v) == 2L &&
+      !any(is.na(v)) &&
+      !any(is.infinite(v)) &&
+      v[[1]] < 0 &&
+      v[[2]] > 0
+  }
+
+  parse_outcome_element <- function(el) {
+    if (is_asym_range(el)) {
+      lbl <- format_range_lbl(el[[1]], el[[2]])
+      return(tibble::tibble(
+        num_val = NA_real_,
+        mid_label = lbl,
+        rope_low = as.numeric(el[[1]]),
+        rope_high = as.numeric(el[[2]]),
+        is_asymmetric = TRUE
+      ))
+    }
+
+    if (is_valid_pos_num(el)) {
+      m_vals <- as.numeric(el)
+      lbls <- vapply(m_vals, format_scalar_lbl, character(1))
+      return(tibble::tibble(
+        num_val = m_vals,
+        mid_label = lbls,
+        rope_low = -m_vals,
+        rope_high = m_vals,
+        is_asymmetric = FALSE
+      ))
+    }
+
+    if (is.list(el) && !is.data.frame(el) && length(el) >= 1L) {
+      rows <- lapply(el, function(sub_el) {
+        if (is_asym_range(sub_el)) {
+          lbl <- format_range_lbl(sub_el[[1]], sub_el[[2]])
+          tibble::tibble(
+            num_val = NA_real_,
+            mid_label = lbl,
+            rope_low = as.numeric(sub_el[[1]]),
+            rope_high = as.numeric(sub_el[[2]]),
+            is_asymmetric = TRUE
+          )
+        } else if (is_valid_pos_num(sub_el) && length(sub_el) == 1L) {
+          m_val <- as.numeric(sub_el)
+          tibble::tibble(
+            num_val = m_val,
+            mid_label = format_scalar_lbl(m_val),
+            rope_low = -m_val,
+            rope_high = m_val,
+            is_asymmetric = FALSE
+          )
+        } else {
+          abort_bad_mid()
+        }
+      })
+      return(dplyr::bind_rows(rows))
+    }
+
+    abort_bad_mid()
+  }
+
   if (is.numeric(mid)) {
-    if (!is_valid_num(mid) || !(length(mid) %in% c(1L, k))) {
-      cli::cli_abort(
-        c(
-          "x" = "Numeric {.arg mid} must contain positive finite values of length 1 or length {k} (matching the number of outcomes).",
-          "i" = "To supply multiple MID steps across outcomes, pass a list of length {k} (e.g., {.code list(c(4, 5), c(1.5, 2.0))})."
+    if (is_asym_range(mid) && is.null(names(mid))) {
+      parsed_list <- replicate(k, parse_outcome_element(mid), simplify = FALSE)
+      names(parsed_list) <- value_names
+    } else if (is_valid_pos_num(mid) && (length(mid) %in% c(1L, k))) {
+      if (length(mid) == 1L) {
+        mid_vec <- rep(mid, k)
+      } else if (!is.null(names(mid)) && all(value_names %in% names(mid))) {
+        mid_vec <- unname(mid[value_names])
+      } else {
+        mid_vec <- unname(mid)
+      }
+      parsed_list <- lapply(mid_vec, parse_outcome_element)
+      names(parsed_list) <- value_names
+    } else {
+      abort_bad_mid(
+        msg = paste0(
+          "Numeric {.arg mid} must be a positive scalar, an asymmetric range `c(low, high)` with `low < 0 < high`, or a positive numeric vector of length ",
+          k,
+          " (matching the number of outcomes)."
         ),
-        class = "peoplenotp_error_bad_mid"
+        info = paste0(
+          "To supply outcome-specific asymmetric ranges or multiple MID steps, pass a list of length ",
+          k,
+          " (e.g., {.code list(c(-10, 5), c(-2, 3))})."
+        )
       )
     }
-
-    if (length(mid) == 1L) {
-      mid_vec <- rep(mid, k)
-    } else if (!is.null(names(mid)) && all(value_names %in% names(mid))) {
-      mid_vec <- unname(mid[value_names])
-    } else {
-      mid_vec <- unname(mid)
-    }
-
-    mid_grid <- as.data.frame(
-      matrix(mid_vec, nrow = 1L, ncol = k),
-      stringsAsFactors = FALSE
-    )
-    names(mid_grid) <- value_names
   } else if (is.list(mid) && !is.data.frame(mid)) {
-    if (length(mid) != k || !all(vapply(mid, is_valid_num, logical(1)))) {
-      cli::cli_abort(
-        c(
-          "x" = "List {.arg mid} must have length {k} (one positive numeric vector per outcome).",
-          "i" = "Received a list of length {length(mid)}."
+    if (length(mid) != k) {
+      abort_bad_mid(
+        msg = paste0(
+          "List {.arg mid} must have length ",
+          k,
+          " (one element per outcome)."
         ),
-        class = "peoplenotp_error_bad_mid"
+        info = paste0("Received a list of length ", length(mid), ".")
       )
     }
 
@@ -962,42 +1091,59 @@ resolve_joint_mid <- function(mid, value_names) {
       mid <- mid[value_names]
     }
 
-    lens <- lengths(mid)
-    max_len <- max(lens)
-    if (!all(lens %in% c(1L, max_len))) {
-      cli::cli_abort(
-        c(
-          "x" = "All vectors in list {.arg mid} must have the same length (or length 1 to be recycled).",
-          "i" = "Received element lengths: {.val {lens}}."
-        ),
-        class = "peoplenotp_error_bad_mid"
-      )
-    }
-
-    cols_expanded <- lapply(mid, function(v) rep(v, length.out = max_len))
-    names(cols_expanded) <- value_names
-    mid_grid <- as.data.frame(cols_expanded, stringsAsFactors = FALSE)
-    mid_grid <- dplyr::distinct(mid_grid)
+    parsed_list <- lapply(mid, parse_outcome_element)
+    names(parsed_list) <- value_names
   } else {
-    cli::cli_abort(
-      c(
-        "x" = "Argument {.arg mid} must be a positive numeric vector or a list of positive numeric vectors.",
-        "i" = "Received an object of class {.cls {class(mid)}}."
-      ),
-      class = "peoplenotp_error_bad_mid"
+    abort_bad_mid()
+  }
+
+  lens <- vapply(parsed_list, nrow, integer(1))
+  max_len <- max(lens)
+  if (!all(lens %in% c(1L, max_len))) {
+    abort_bad_mid(
+      msg = "All outcomes in {.arg mid} must have the same number of MID steps (or 1 step to be recycled).",
+      info = "Received step counts: {.val {lens}}."
     )
   }
 
-  formatted_cols <- lapply(mid_grid, function(col_vals) {
-    format(col_vals, trim = TRUE, nsmall = 1)
+  expanded_list <- lapply(parsed_list, function(tbl) {
+    if (nrow(tbl) == 1L && max_len > 1L) {
+      tbl[rep(1L, max_len), , drop = FALSE]
+    } else {
+      tbl
+    }
   })
-  mid_labels <- do.call(
-    paste,
-    c(formatted_cols, list(sep = " / "))
-  )
+
+  # Deduplicate identical joint steps across all outcomes
+  lbl_mat <- lapply(expanded_list, function(tbl) tbl$mid_label)
+  step_labels_raw <- do.call(paste, c(lbl_mat, list(sep = " / ")))
+  keep_idx <- !duplicated(step_labels_raw)
+  mid_labels <- step_labels_raw[keep_idx]
+
+  mid_grid_cols <- lapply(expanded_list, function(tbl) {
+    sub_tbl <- tbl[keep_idx, , drop = FALSE]
+    if (any(sub_tbl$is_asymmetric)) {
+      sub_tbl$mid_label
+    } else {
+      sub_tbl$num_val
+    }
+  })
+  names(mid_grid_cols) <- value_names
+
+  low_grid_cols <- lapply(expanded_list, function(tbl) {
+    tbl$rope_low[keep_idx]
+  })
+  names(low_grid_cols) <- value_names
+
+  high_grid_cols <- lapply(expanded_list, function(tbl) {
+    tbl$rope_high[keep_idx]
+  })
+  names(high_grid_cols) <- value_names
 
   list(
-    mid_grid = tibble::as_tibble(mid_grid),
+    mid_grid = tibble::as_tibble(mid_grid_cols),
+    rope_low_grid = tibble::as_tibble(low_grid_cols),
+    rope_high_grid = tibble::as_tibble(high_grid_cols),
     mid_labels = mid_labels
   )
 }
@@ -1023,6 +1169,8 @@ compute_joint_mid_step <- function(
   df_sub,
   value_names,
   step_mids,
+  step_lows,
+  step_highs,
   step_label,
   better_is_vec,
   include_marginals = FALSE
@@ -1036,24 +1184,27 @@ compute_joint_mid_step <- function(
   out_list <- list(mid = step_label)
   for (vn in value_names) {
     out_list[[paste0("mid_", vn)]] <- unname(step_mids[[vn]])
+    out_list[[paste0("rope_low_", vn)]] <- unname(step_lows[[vn]])
+    out_list[[paste0("rope_high_", vn)]] <- unname(step_highs[[vn]])
   }
 
   for (vn in value_names) {
     draws <- df_sub[[vn]]
-    m <- step_mids[[vn]]
+    r_low <- step_lows[[vn]]
+    r_high <- step_highs[[vn]]
     dir <- better_is_vec[[vn]]
 
     pos_prop <- mean(draws > 0, na.rm = TRUE)
     neg_prop <- mean(draws < 0, na.rm = TRUE)
     dom_mask <- if (pos_prop >= neg_prop) draws > 0 else draws < 0
 
-    rope_mask <- draws >= -m & draws <= m
+    rope_mask <- draws >= r_low & draws <= r_high
     if (dir == "lower") {
-      imp_mask <- draws < -m
-      det_mask <- draws > m
+      imp_mask <- draws < r_low
+      det_mask <- draws > r_high
     } else {
-      imp_mask <- draws > m
-      det_mask <- draws < -m
+      imp_mask <- draws > r_high
+      det_mask <- draws < r_low
     }
 
     all_pd_dom <- all_pd_dom & dom_mask
